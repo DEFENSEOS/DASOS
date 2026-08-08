@@ -428,6 +428,9 @@ function colName(dbKey, col){ return dbKey + '_' + col; }
 
 /* ---------- AUTH ---------- */
 const AUTH_COLLECTION = 'auth_users';
+/* Only this Discord ID is allowed to bootstrap the very first admin account.
+   Change this if the system ever needs a new genesis admin. */
+const GENESIS_ADMIN_ID = '1382134442918674482';
 let AUTH_USERS = [];
 let currentUser = null;
 let currentUserIsAdmin = false;
@@ -477,8 +480,8 @@ function updateLoginModeText(){
   const sub = document.getElementById('loginSub');
   const btn = document.getElementById('loginBtn');
   if(AUTH_USERS.length === 0){
-    sub.textContent = "No accounts exist yet. Signing in here creates the first account.";
-    btn.textContent = "Create Account & Log In";
+    sub.textContent = "No accounts exist yet. The system owner should log in with their Discord ID to create the first admin account.";
+    btn.textContent = "Log In";
   } else {
     sub.textContent = "Sign in with your Discord ID and password.";
     btn.textContent = "Log In";
@@ -494,6 +497,10 @@ async function attemptLogin(){
   const id = sanitizeId(rawId);
 
   if(AUTH_USERS.length === 0){
+    if(id !== GENESIS_ADMIN_ID){
+      errEl.textContent = "No accounts exist yet. Only the system owner can set up the first account — ask them to log in first.";
+      return;
+    }
     await createAccount(id, rawId, password, true);
     setSession(id, rawId, true);
     return;
