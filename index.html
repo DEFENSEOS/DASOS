@@ -263,6 +263,7 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
 <div class="topbar" id="topbar">
   <div class="who">Logged in as <strong id="whoDiscord"></strong></div>
   <div class="topbar-actions">
+    <button class="btn alt small" onclick="toggleAuditPanel()">Audit Log</button>
     <button class="btn alt small" id="manageAccBtn" onclick="toggleAccountsPanel()">Manage Accounts</button>
     <button class="btn danger small" onclick="logout()">Log Out</button>
   </div>
@@ -282,6 +283,11 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
     <button class="btn" onclick="addAccount()">+ Add / Reset Account</button>
   </div>
   <div style="margin-top:16px;" id="list-accounts"></div>
+</div>
+
+<div class="accounts-panel" id="auditPanel" style="display:none;">
+  <div class="panel-head"><h2>Audit Log</h2><span class="count" id="count-auditlog">0 entries</span></div>
+  <div style="max-height:420px;overflow-y:auto;" id="list-auditlog"></div>
 </div>
 
 <div class="wrap" id="appWrap">
@@ -463,6 +469,12 @@ function describeFields(obj){
   const skip = new Set(['id','salt','hash']);
   return Object.keys(obj).filter(k=>!skip.has(k) && obj[k]!==undefined && obj[k]!=='')
     .map(k=>`${k}: ${obj[k]}`).join(', ');
+}
+function recordLabel(col, rec){
+  if(!rec) return '';
+  if(col==='punishments') return rec.name;
+  if(col==='deadlines') return rec.task;
+  return rec.username;
 }
 async function logAction(dbKey, action, target, details){
   const entry = {
@@ -820,6 +832,7 @@ async function updateRecord(dbKey, col, id, patch){
 
 async function deleteRecord(dbKey, col, id){
   if(!confirm("Delete this entry? This cannot be undone.")) return;
+  const rec = DATA[dbKey][col].find(r=>r.id===id);
   if(cloudEnabled){
     try{ await db.collection(colName(dbKey,col)).doc(id).delete(); }
     catch(e){ console.error(e); }
@@ -828,6 +841,7 @@ async function deleteRecord(dbKey, col, id){
     saveLocal(dbKey,col);
     renderPanel(dbKey,col);
   }
+  logAction(dbKey, col+'_remove', recordLabel(col,rec) || id, describeFields(rec||{}));
 }
 
 /* ---------- DB TABS ---------- */
@@ -875,6 +889,7 @@ function addAdmission(){
   addRecord(dbKey, 'admissions', { username, dateAdded: todayStr() });
   addRecord(dbKey, 'quota', { username, complete:false }, username.toLowerCase());
   addRecord(dbKey, 'points', { username, logistical:0, educational:0 }, username.toLowerCase());
+  logAction(dbKey, 'admission_add', username, 'Admitted to '+dbKey.toUpperCase());
   document.getElementById('a-username').value = '';
 }
 function renderAdmissions(dbKey){
@@ -898,7 +913,12 @@ function setPoints(dbKey, username, field, value){
   const n = Number(value);
   const patch = { username };
   patch[field] = isNaN(n) ? 0 : n;
+  const prec = DATA[dbKey].points.find(p=>p.username.toLowerCase()===username.toLowerCase());
+  const oldVal = prec && typeof prec[field] === 'number' ? prec[field] : 0;
   updateRecord(dbKey, 'points', username.toLowerCase(), patch);
+  if(oldVal !== patch[field]){
+    logAction(dbKey, 'points_update', username, `${field}: ${oldVal} -> ${patch[field]}`);
+  }
 }
 function renderPoints(dbKey){
   if(dbKey !== currentDb) return;
@@ -934,14 +954,12 @@ function renderPoints(dbKey){
 function addPunishment(){
   const name = document.getElementById('pu-name').value.trim();
   if(!name){ alert("Username is required."); return; }
-  addRecord(currentDb, 'punishments', {
-    date: todayStr(),
-    name,
-    type: document.getElementById('pu-type').value,
-    duration: document.getElementById('pu-duration').value.trim(),
-    reason: document.getElementById('pu-reason').value.trim(),
-    issuer: document.getElementById('pu-issuer').value.trim()
-  });
+  const type = document.getElementById('pu-type').value;
+  const duration = document.getElementById('pu-duration').value.trim();
+  const reason = document.getElementById('pu-reason').value.trim();
+  const issuer = document.getElementById('pu-issuer').value.trim();
+  addRecord(currentDb, 'punishments', { date: todayStr(), name, type, duration, reason, issuer });
+  logAction(currentDb, 'punishment_add', name, `${type}${duration?' — '+duration:''}${reason?' — '+reason:''}`);
   ['pu-name','pu-duration','pu-reason','pu-issuer'].forEach(id=>document.getElementById(id).value='');
 }
 function renderPunishments(dbKey){
@@ -967,18 +985,18 @@ function addDeadline(){
   const task = document.getElementById('d-task').value.trim();
   const due = document.getElementById('d-due').value;
   if(!task || !due){ alert("Task and due date are required."); return; }
-  addRecord(currentDb, 'deadlines', {
-    task,
-    assignee: document.getElementById('d-assignee').value.trim(),
-    due,
-    priority: document.getElementById('d-priority').value,
-    notes: document.getElementById('d-notes').value.trim(),
-    status: 'Pending'
-  });
+  const assignee = document.getElementById('d-assignee').value.trim();
+  const priority = document.getElementById('d-priority').value;
+  const notes = document.getElementById('d-notes').value.trim();
+  addRecord(currentDb, 'deadlines', { task, assignee, due, priority, notes, status: 'Pending' });
+  logAction(currentDb, 'deadline_add', task, `${assignee?assignee+' — ':''}due ${due} (${priority})`);
   ['d-task','d-assignee','d-due','d-notes'].forEach(id=>document.getElementById(id).value='');
 }
 function toggleDeadlineStatus(dbKey, id, current){
-  updateRecord(dbKey, 'deadlines', id, { status: current==='Pending' ? 'Complete' : 'Pending' });
+  const newStatus = current==='Pending' ? 'Complete' : 'Pending';
+  const rec = DATA[dbKey].deadlines.find(r=>r.id===id);
+  updateRecord(dbKey, 'deadlines', id, { status: newStatus });
+  logAction(dbKey, 'deadline_update', rec ? rec.task : id, `status: ${current} -> ${newStatus}`);
 }
 function renderDeadlines(dbKey){
   if(dbKey !== currentDb) return;
@@ -1005,6 +1023,7 @@ function renderDeadlines(dbKey){
 /* ---------- QUOTA (driven by admissions) ---------- */
 function toggleQuota(dbKey, username, currentComplete){
   updateRecord(dbKey, 'quota', username.toLowerCase(), { username, complete: !currentComplete });
+  logAction(dbKey, 'quota_update', username, `complete: ${currentComplete} -> ${!currentComplete}`);
 }
 function renderQuota(dbKey){
   if(dbKey !== currentDb) return;
