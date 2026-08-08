@@ -433,7 +433,82 @@ const AUTH_COLLECTION = 'auth_users';
 const GENESIS_ADMIN_ID = '1382134442918674482';
 let AUTH_USERS = [];
 let currentUser = null;
+let currentUserDisplayId = null;
 let currentUserIsAdmin = false;
+
+/* ---------- AUDIT LOG ---------- */
+const AUDIT_COLLECTION = 'audit_log';
+let AUDIT_LOG = [];
+
+function saveAuditLocal(){ localStorage.setItem('ll_audit_log', JSON.stringify(AUDIT_LOG)); }
+function loadAuditLocal(){
+  const raw = localStorage.getItem('ll_audit_log');
+  AUDIT_LOG = raw ? JSON.parse(raw) : [];
+}
+function initAuditLog(){
+  if(cloudEnabled){
+    db.collection(AUDIT_COLLECTION).orderBy('ts','desc').limit(300).onSnapshot(snap=>{
+      AUDIT_LOG = [];
+      snap.forEach(doc=> AUDIT_LOG.push({ id: doc.id, ...doc.data() }));
+      renderAuditLog();
+    }, err=>{
+      console.error("Firestore error on "+AUDIT_COLLECTION, err);
+    });
+  } else {
+    loadAuditLocal();
+    renderAuditLog();
+  }
+}
+function describeFields(obj){
+  const skip = new Set(['id','salt','hash']);
+  return Object.keys(obj).filter(k=>!skip.has(k) && obj[k]!==undefined && obj[k]!=='')
+    .map(k=>`${k}: ${obj[k]}`).join(', ');
+}
+async function logAction(dbKey, action, target, details){
+  const entry = {
+    actor: currentUser || '(unknown)',
+    actorDisplay: currentUserDisplayId || currentUser || '(unknown)',
+    action, target,
+    dbKey: dbKey || null,
+    details: details || '',
+    ts: new Date().toISOString()
+  };
+  if(cloudEnabled){
+    try{ await db.collection(AUDIT_COLLECTION).add(entry); }
+    catch(e){ console.error("Could not write audit log entry", e); }
+  } else {
+    entry.id = uid();
+    AUDIT_LOG.unshift(entry);
+    AUDIT_LOG = AUDIT_LOG.slice(0,300);
+    saveAuditLocal();
+    renderAuditLog();
+  }
+}
+function renderAuditLog(){
+  const list = document.getElementById('list-auditlog');
+  if(!list) return;
+  document.getElementById('count-auditlog').textContent = AUDIT_LOG.length + " entries";
+  if(!AUDIT_LOG.length){ list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim);">No activity logged yet</div>'; return; }
+  const rows = [...AUDIT_LOG].sort((a,b)=> (b.ts||'').localeCompare(a.ts||''));
+  list.innerHTML = rows.map(r=>`
+    <div class="roster-row" style="align-items:flex-start;">
+      <div style="min-width:0;">
+        <div class="roster-name" style="font-size:12.5px;">${esc(r.actorDisplay)} <span style="color:var(--text-dim);font-weight:500;">${esc(r.action)}</span> ${r.dbKey?`<span class="tag warn">${esc(r.dbKey.toUpperCase())}</span>`:''}</div>
+        <div style="font-size:12px;color:var(--text-dim);margin-top:3px;">${esc(r.target)}${r.details?' — '+esc(r.details):''}</div>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);white-space:nowrap;">${fmtDateTime(r.ts)}</div>
+    </div>`).join('');
+}
+function fmtDateTime(iso){
+  if(!iso) return '—';
+  const d = new Date(iso);
+  if(isNaN(d)) return iso;
+  return d.toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+}
+function toggleAuditPanel(){
+  const p = document.getElementById('auditPanel');
+  p.style.display = (p.style.display === 'block') ? 'none' : 'block';
+}
 
 function sanitizeId(s){ return String(s).trim().toLowerCase().replace(/\s+/g,''); }
 
@@ -501,8 +576,9 @@ async function attemptLogin(){
       errEl.textContent = "No accounts exist yet. Only the system owner can set up the first account — ask them to log in first.";
       return;
     }
-    await createAccount(id, rawId, password, true);
+    await createAccount(id, rawId, password, true, id, rawId);
     setSession(id, rawId, true);
+    logAction(null, 'login', id, 'Bootstrap admin account created and logged in');
     return;
   }
 
@@ -511,12 +587,14 @@ async function attemptLogin(){
   const hash = await sha256Hex(acct.salt + password);
   if(hash !== acct.hash){ errEl.textContent = "Incorrect password."; return; }
   setSession(id, acct.discordId, !!acct.isAdmin);
+  logAction(null, 'login', id, 'Logged in');
 }
 
-async function createAccount(id, displayId, password, isAdmin){
+async function createAccount(id, displayId, password, isAdmin, actorId, actorDisplay){
   const salt = genSalt();
   const hash = await sha256Hex(salt + password);
   const record = { discordId: displayId, salt, hash, isAdmin: !!isAdmin, createdAt: todayStr() };
+  const wasExisting = AUTH_USERS.some(u=>u.id===id);
   if(cloudEnabled){
     try{ await db.collection(AUTH_COLLECTION).doc(id).set(record); }
     catch(e){ console.error(e); alert("Could not save account to cloud: "+e.message); }
@@ -528,6 +606,10 @@ async function createAccount(id, displayId, password, isAdmin){
     renderAccounts();
     updateLoginModeText();
   }
+  const savedActor = currentUser, savedActorDisplay = currentUserDisplayId;
+  if(actorId){ currentUser = actorId; currentUserDisplayId = actorDisplay; }
+  logAction(null, wasExisting ? 'account_reset' : 'account_create', displayId, isAdmin ? 'Admin account' : 'Standard account');
+  if(actorId){ currentUser = savedActor; currentUserDisplayId = savedActorDisplay; }
 }
 
 function addAccount(){
@@ -546,6 +628,7 @@ async function removeAccount(id){
   if(!currentUserIsAdmin){ alert("Only admins can remove accounts."); return; }
   if(AUTH_USERS.length <= 1){ alert("You can't remove the last remaining account — it would lock everyone out."); return; }
   if(!confirm("Remove this account? They will no longer be able to log in.")) return;
+  const target = AUTH_USERS.find(u=>u.id===id);
   if(cloudEnabled){
     try{ await db.collection(AUTH_COLLECTION).doc(id).delete(); }
     catch(e){ console.error(e); }
@@ -554,6 +637,7 @@ async function removeAccount(id){
     saveAuthLocal();
     renderAccounts();
   }
+  logAction(null, 'account_remove', target ? target.discordId : id, '');
   if(currentUser === id) logout();
 }
 
@@ -563,6 +647,7 @@ async function toggleAdmin(id, current){
     alert("You can't remove the last remaining admin.");
     return;
   }
+  const target = AUTH_USERS.find(u=>u.id===id);
   if(cloudEnabled){
     try{ await db.collection(AUTH_COLLECTION).doc(id).set({ isAdmin: !current }, { merge:true }); }
     catch(e){ console.error(e); }
@@ -572,6 +657,7 @@ async function toggleAdmin(id, current){
     saveAuthLocal();
     renderAccounts();
   }
+  logAction(null, current ? 'admin_revoke' : 'admin_grant', target ? target.discordId : id, '');
   if(currentUser === id){ currentUserIsAdmin = !current; }
 }
 
@@ -637,6 +723,7 @@ function initFirebase(){
     loadFromLocalStorage();
     renderAll();
     initAuth();
+    initAuditLog();
     return;
   }
   try{
@@ -662,6 +749,7 @@ function initFirebase(){
       });
     });
     initAuth();
+    initAuditLog();
   }catch(e){
     console.error(e);
     document.getElementById('warnBanner').classList.add('show');
@@ -670,6 +758,7 @@ function initFirebase(){
     loadFromLocalStorage();
     renderAll();
     initAuth();
+    initAuditLog();
   }
 }
 
