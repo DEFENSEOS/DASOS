@@ -286,6 +286,10 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
 
 <div class="wrap" id="appWrap">
 
+  <div class="pill-row">
+    <div class="pill"><span class="dot" id="statusDot"></span><span id="statusText">Connecting…</span></div>
+  </div>
+
   <div class="warn-banner" id="warnBanner">
     No cloud config detected — running on local storage only. Data will not sync across devices/staff. Add your Firebase config in the source to enable cloud sync.
   </div>
@@ -457,6 +461,9 @@ function initAuth(){
       restoreSession();
     }, err=>{
       console.error("Firestore error on "+AUTH_COLLECTION, err);
+      const banner = document.getElementById('warnBanner');
+      banner.classList.add('show');
+      banner.textContent = "Cloud sync error (" + AUTH_COLLECTION + "): " + err.message + ". This usually means your Firestore Security Rules are blocking access — check the Rules tab in the Firebase console.";
     });
   } else {
     loadAuthLocal();
@@ -641,6 +648,9 @@ function initFirebase(){
         }, err=>{
           console.error("Firestore error on "+colName(dbKey,col), err);
           setStatus(false, "Cloud error — check config");
+          const banner = document.getElementById('warnBanner');
+          banner.classList.add('show');
+          banner.textContent = "Cloud sync error (" + colName(dbKey,col) + "): " + err.message + ". This usually means your Firestore Security Rules are blocking access — check the Rules tab in the Firebase console.";
         });
       });
     });
