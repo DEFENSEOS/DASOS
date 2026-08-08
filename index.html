@@ -42,7 +42,6 @@ body{
 }
 .wrap{max-width:620px;margin:0 auto;}
 
-/* pill buttons row (status + warning replaced by simple pill) */
 .pill-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:28px;}
 .pill{
   display:inline-flex;align-items:center;gap:6px;
@@ -69,7 +68,6 @@ body{
 }
 .warn-banner.show{display:block;}
 
-/* DB TABS -> pill style like social buttons */
 .db-tabs{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
 .db-tab{
   flex:1;
@@ -90,7 +88,6 @@ body{
 .db-tab.active .name{color:var(--blue);}
 .db-tab.active .desc{color:#7ea3d9;}
 
-/* SUB TABS -> pills */
 .tabs{display:flex;gap:6px;margin:22px 0 20px;flex-wrap:wrap;}
 .tab{
   font-size:12.5px;font-weight:500;
@@ -106,7 +103,6 @@ body{
 .tab:hover{color:var(--text-mid);border-color:#3a3a3a;}
 .tab.active{color:var(--bg);background:var(--text);border-color:var(--text);}
 
-/* PANEL — no heavy card, just section with a thin top rule */
 .panel{display:none;}
 .panel.active{display:block;}
 .panel-head{
@@ -123,7 +119,6 @@ body{
 }
 .panel-head .count{font-size:12px;color:var(--text-dim);}
 
-/* FORM */
 .form-row{
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
@@ -165,7 +160,6 @@ textarea{resize:vertical;min-height:46px;}
 .btn.danger:hover{background:var(--red-soft);opacity:1;}
 .btn.small{padding:4px 10px;font-size:11px;}
 
-/* TABLE */
 table{width:100%;border-collapse:collapse;font-size:13px;}
 th{
   font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;
@@ -191,7 +185,6 @@ td:first-child{color:var(--text);font-weight:500;}
 .empty-row td{text-align:center;color:var(--text-dim);font-size:13px;padding:26px;}
 .actions{display:flex;gap:6px;}
 
-/* ADMISSIONS / QUOTA LIST */
 .roster-row{
   display:flex;align-items:center;justify-content:space-between;
   padding:11px 2px;
@@ -213,7 +206,6 @@ td:first-child{color:var(--text);font-weight:500;}
 .check-label.complete{color:var(--green);}
 .check-label.incomplete{color:var(--text-dim);}
 
-/* POINTS (set-value, not a log) */
 .pt-group{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
 .pt-field{display:flex;align-items:center;gap:7px;}
 .pt-field label{margin:0;font-size:11px;color:var(--text-dim);white-space:nowrap;}
@@ -224,8 +216,6 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
 .search-row{margin:14px 0 16px;}
 .search-row input{max-width:280px;}
 
-
-/* AUTH */
 #appWrap{display:none;}
 #topbar{display:none;}
 #accountsPanel{display:none;}
@@ -325,8 +315,7 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
     <div class="tab" data-tab="quota">Quota Sheet</div>
   </div>
 
-  <!-- ADMISSIONS -->
-  <div class="panel active" id="panel-admissions">
+    <div class="panel active" id="panel-admissions">
     <div class="panel-head"><h2>Admissions</h2><span class="count" id="count-admissions">0 users</span></div>
     <div class="form-row">
       <div><label>Username</label><input id="a-username" placeholder="Username"></div>
@@ -337,15 +326,13 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
     <div id="list-admissions"></div>
   </div>
 
-  <!-- POINTS -->
-  <div class="panel" id="panel-points">
+    <div class="panel" id="panel-points">
     <div class="panel-head"><h2>Logistical / Educational Points</h2><span class="count" id="count-points">0 users</span></div>
     <div class="search-row"><input type="search" placeholder="Search users…" oninput="setSearch('points', this.value)"></div>
     <div id="list-points"></div>
   </div>
 
-  <!-- PUNISHMENTS -->
-  <div class="panel" id="panel-punishments">
+    <div class="panel" id="panel-punishments">
     <div class="panel-head"><h2>Punishments</h2><span class="count" id="count-punishments">0 entries</span></div>
     <div class="form-row">
       <div><label>Username</label><input id="pu-name" placeholder="Username"></div>
@@ -375,8 +362,7 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
     </div>
   </div>
 
-  <!-- DEADLINES -->
-  <div class="panel" id="panel-deadlines">
+    <div class="panel" id="panel-deadlines">
     <div class="panel-head"><h2>Rank-Up Deadlines</h2><span class="count" id="count-deadlines">0 entries</span></div>
     <div class="form-row">
       <div><label>Username</label><input id="d-assignee" placeholder="Username"></div>
@@ -399,8 +385,7 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
     </div>
   </div>
 
-  <!-- QUOTA -->
-  <div class="panel" id="panel-quota">
+    <div class="panel" id="panel-quota">
     <div class="panel-head"><h2>Quota Sheet</h2><span class="count" id="count-quota">0 users</span></div>
     <div class="search-row"><input type="search" placeholder="Search users…" oninput="setSearch('quota', this.value)"></div>
     <div id="list-quota"></div>
@@ -409,10 +394,6 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
 </div>
 
 <script>
-/* ============ FIREBASE CONFIG ============
-   Paste your Firebase project config below to enable real-time
-   cloud sync across all staff. Leave as-is to run on localStorage only.
-============================================= */
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDqxWLY4TJ5C6P2Vf7K2RmUORFlroZX9zY",
   authDomain: "dasdb-16a8e.firebaseapp.com",
@@ -461,17 +442,13 @@ function fmtDate(iso){
 }
 function colName(dbKey, col){ return dbKey + '_' + col; }
 
-/* ---------- AUTH ---------- */
 const AUTH_COLLECTION = 'auth_users';
-/* Only this Discord ID is allowed to bootstrap the very first admin account.
-   Change this if the system ever needs a new genesis admin. */
 const GENESIS_ADMIN_ID = '1382134442918674482';
 let AUTH_USERS = [];
 let currentUser = null;
 let currentUserDisplayId = null;
 let currentUserIsAdmin = false;
 
-/* ---------- AUDIT LOG ---------- */
 const AUDIT_COLLECTION = 'audit_log';
 let AUDIT_LOG = [];
 
@@ -786,7 +763,6 @@ function restoreSession(){
   if(acct){ setSession(saved, acct.displayName || acct.discordId, !!acct.isAdmin); }
 }
 
-/* ---------- INIT ---------- */
 function initFirebase(){
   const hasConfig = FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId;
   if(!hasConfig){
@@ -842,7 +818,6 @@ function setStatus(on, text){
   console.log('[Logistics Ledger] '+text);
 }
 
-/* ---------- STORAGE ABSTRACTION ---------- */
 function loadFromLocalStorage(){
   DATABASES.forEach(dbKey=>{
     COLLECTIONS.forEach(col=>{
@@ -905,7 +880,6 @@ async function deleteRecord(dbKey, col, id){
   logAction(dbKey, col+'_remove', recordLabel(col,rec) || id, describeFields(rec||{}));
 }
 
-/* ---------- DB TABS ---------- */
 function updateTabVisibility(dbKey){
   const deadlinesTab = document.getElementById('tab-deadlines');
   if(dbKey === 'ard'){
@@ -929,7 +903,6 @@ document.querySelectorAll('.db-tab').forEach(t=>{
 });
 updateTabVisibility(currentDb);
 
-/* ---------- SUB TABS ---------- */
 document.querySelectorAll('.tab').forEach(tab=>{
   tab.addEventListener('click', ()=>{
     document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -940,7 +913,6 @@ document.querySelectorAll('.tab').forEach(tab=>{
   });
 });
 
-/* ---------- ADMISSIONS ---------- */
 function addAdmission(){
   if(!requireLogin()) return;
   const username = document.getElementById('a-username').value.trim();
@@ -994,7 +966,6 @@ function renderAdmissions(dbKey){
     </div>`).join('');
 }
 
-/* ---------- POINTS (set value per user, driven by admissions) ---------- */
 function setPoints(dbKey, username, field, value){
   if(!requireLogin()) return;
   const n = Number(value);
@@ -1040,7 +1011,6 @@ function renderPoints(dbKey){
   }).join('');
 }
 
-/* ---------- PUNISHMENTS ---------- */
 function addPunishment(){
   if(!requireLogin()) return;
   const name = document.getElementById('pu-name').value.trim();
@@ -1074,7 +1044,6 @@ function renderPunishments(dbKey){
     </tr>`).join('');
 }
 
-/* ---------- DEADLINES ---------- */
 function addDeadline(){
   if(!requireLogin()) return;
   const task = document.getElementById('d-task').value.trim();
@@ -1119,7 +1088,6 @@ function renderDeadlines(dbKey){
     </tr>`;}).join('');
 }
 
-/* ---------- QUOTA (driven by admissions) ---------- */
 function toggleQuota(dbKey, username, currentComplete){
   if(!requireLogin()) return;
   updateRecord(dbKey, 'quota', username.toLowerCase(), { username, complete: !currentComplete });
@@ -1153,7 +1121,6 @@ function renderQuota(dbKey){
   }).join('');
 }
 
-/* ---------- HELPERS ---------- */
 function esc(s){
   if(s===undefined||s===null) return '';
   return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
