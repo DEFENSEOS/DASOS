@@ -221,6 +221,10 @@ td:first-child{color:var(--text);font-weight:500;}
 
 footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
 
+.search-row{margin:14px 0 16px;}
+.search-row input{max-width:280px;}
+
+
 /* AUTH */
 #appWrap{display:none;}
 #topbar{display:none;}
@@ -274,6 +278,7 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
   <div id="accAddForm">
     <div class="form-row">
       <div><label>Discord ID</label><input id="acc-discordid" placeholder="Their Discord ID"></div>
+      <div><label>Display Name</label><input id="acc-displayname" placeholder="Name to show (optional)"></div>
       <div><label>Password</label><input id="acc-password" type="password" placeholder="Set a password"></div>
     </div>
     <label style="display:flex;align-items:center;gap:7px;margin-bottom:10px;cursor:pointer;">
@@ -287,6 +292,7 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
 
 <div class="accounts-panel" id="auditPanel" style="display:none;">
   <div class="panel-head"><h2>Audit Log</h2><span class="count" id="count-auditlog">0 entries</span></div>
+  <div class="search-row"><input type="search" placeholder="Search actor, action, target, details…" oninput="setSearch('auditlog', this.value)"></div>
   <div style="max-height:420px;overflow-y:auto;" id="list-auditlog"></div>
 </div>
 
@@ -324,14 +330,17 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
     <div class="panel-head"><h2>Admissions</h2><span class="count" id="count-admissions">0 users</span></div>
     <div class="form-row">
       <div><label>Username</label><input id="a-username" placeholder="Username"></div>
+      <div><label>Rank</label><select id="a-rank"></select></div>
     </div>
     <button class="btn" onclick="addAdmission()">+ Add User</button>
-    <div style="margin-top:16px;" id="list-admissions"></div>
+    <div class="search-row"><input type="search" placeholder="Search users…" oninput="setSearch('admissions', this.value)"></div>
+    <div id="list-admissions"></div>
   </div>
 
   <!-- POINTS -->
   <div class="panel" id="panel-points">
     <div class="panel-head"><h2>Logistical / Educational Points</h2><span class="count" id="count-points">0 users</span></div>
+    <div class="search-row"><input type="search" placeholder="Search users…" oninput="setSearch('points', this.value)"></div>
     <div id="list-points"></div>
   </div>
 
@@ -357,7 +366,8 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
       <div style="grid-column:1/-1;"><label>Reason</label><textarea id="pu-reason" placeholder="Reason for punishment"></textarea></div>
     </div>
     <button class="btn" onclick="addPunishment()">+ Log Punishment</button>
-    <div style="overflow-x:auto;margin-top:16px;">
+    <div class="search-row"><input type="search" placeholder="Search punishments…" oninput="setSearch('punishments', this.value)"></div>
+    <div style="overflow-x:auto;">
     <table>
       <thead><tr><th>Date</th><th>Username</th><th>Type</th><th>Duration</th><th>Reason</th><th>Issued by</th><th></th></tr></thead>
       <tbody id="table-punishments"></tbody>
@@ -380,7 +390,8 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
       <div style="grid-column:1/-1;"><label>Notes</label><textarea id="d-notes" placeholder="Requirements still needed, etc."></textarea></div>
     </div>
     <button class="btn" onclick="addDeadline()">+ Add Rank-Up Deadline</button>
-    <div style="overflow-x:auto;margin-top:16px;">
+    <div class="search-row"><input type="search" placeholder="Search deadlines…" oninput="setSearch('deadlines', this.value)"></div>
+    <div style="overflow-x:auto;">
     <table>
       <thead><tr><th>Due</th><th>Username</th><th>Target rank</th><th>Priority</th><th>Status</th><th>Notes</th><th></th></tr></thead>
       <tbody id="table-deadlines"></tbody>
@@ -391,6 +402,7 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
   <!-- QUOTA -->
   <div class="panel" id="panel-quota">
     <div class="panel-head"><h2>Quota Sheet</h2><span class="count" id="count-quota">0 users</span></div>
+    <div class="search-row"><input type="search" placeholder="Search users…" oninput="setSearch('quota', this.value)"></div>
     <div id="list-quota"></div>
   </div>
 
@@ -421,8 +433,25 @@ let DATA = {
 };
 let currentDb = 'ard';
 let currentTab = 'admissions';
+const RANKS = {
+  das: ["Associate","Junior Attache","Defense Attache","Senior Attache","Junior Liaison Officer","Liaison Officer","Head Liaison Officer","Superintendent","Assistant Commissioner","Commissioner","Chief Commissioner","Director of Attache Staff","Deputy Ambassador General","Ambassador General"],
+  ard: ["Operations Cadet","Junior Operations Specialist","Operations Specialist","Senior Operations Specialist","Junior Operations Officer","Operations Officer","Senior Operations Officer","Head Coordination Officer","Executive Division Manager","Lead Division Manager"]
+};
+let SEARCH = { admissions:'', points:'', punishments:'', deadlines:'', quota:'', auditlog:'' };
+function setSearch(key, val){
+  SEARCH[key] = val.trim().toLowerCase();
+  if(key==='auditlog'){ renderAuditLog(); } else { renderPanel(currentDb, key); }
+}
+function matches(term, ...fields){
+  if(!term) return true;
+  return fields.some(f=> String(f||'').toLowerCase().includes(term));
+}
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function requireLogin(){
+  if(!currentUser){ alert("You must be logged in to do that."); return false; }
+  return true;
+}
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 function fmtDate(iso){
   if(!iso) return '—';
@@ -499,9 +528,12 @@ async function logAction(dbKey, action, target, details){
 function renderAuditLog(){
   const list = document.getElementById('list-auditlog');
   if(!list) return;
-  document.getElementById('count-auditlog').textContent = AUDIT_LOG.length + " entries";
-  if(!AUDIT_LOG.length){ list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim);">No activity logged yet</div>'; return; }
-  const rows = [...AUDIT_LOG].sort((a,b)=> (b.ts||'').localeCompare(a.ts||''));
+  const term = SEARCH.auditlog;
+  const rows = [...AUDIT_LOG]
+    .filter(r=>matches(term, r.actorDisplay, r.action, r.target, r.details, r.dbKey))
+    .sort((a,b)=> (b.ts||'').localeCompare(a.ts||''));
+  document.getElementById('count-auditlog').textContent = rows.length + " entries";
+  if(!rows.length){ list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-dim);">${term?'No matching entries':'No activity logged yet'}</div>`; return; }
   list.innerHTML = rows.map(r=>`
     <div class="roster-row" style="align-items:flex-start;">
       <div style="min-width:0;">
@@ -598,14 +630,14 @@ async function attemptLogin(){
   if(!acct){ errEl.textContent = "No account with that Discord ID. Ask an admin to add you under Manage Accounts."; return; }
   const hash = await sha256Hex(acct.salt + password);
   if(hash !== acct.hash){ errEl.textContent = "Incorrect password."; return; }
-  setSession(id, acct.discordId, !!acct.isAdmin);
+  setSession(id, acct.displayName || acct.discordId, !!acct.isAdmin);
   logAction(null, 'login', id, 'Logged in');
 }
 
-async function createAccount(id, displayId, password, isAdmin, actorId, actorDisplay){
+async function createAccount(id, displayId, password, isAdmin, actorId, actorDisplay, displayName){
   const salt = genSalt();
   const hash = await sha256Hex(salt + password);
-  const record = { discordId: displayId, salt, hash, isAdmin: !!isAdmin, createdAt: todayStr() };
+  const record = { discordId: displayId, displayName: displayName || '', salt, hash, isAdmin: !!isAdmin, createdAt: todayStr() };
   const wasExisting = AUTH_USERS.some(u=>u.id===id);
   if(cloudEnabled){
     try{ await db.collection(AUTH_COLLECTION).doc(id).set(record); }
@@ -620,7 +652,7 @@ async function createAccount(id, displayId, password, isAdmin, actorId, actorDis
   }
   const savedActor = currentUser, savedActorDisplay = currentUserDisplayId;
   if(actorId){ currentUser = actorId; currentUserDisplayId = actorDisplay; }
-  logAction(null, wasExisting ? 'account_reset' : 'account_create', displayId, isAdmin ? 'Admin account' : 'Standard account');
+  logAction(null, wasExisting ? 'account_reset' : 'account_create', displayName || displayId, isAdmin ? 'Admin account' : 'Standard account');
   if(actorId){ currentUser = savedActor; currentUserDisplayId = savedActorDisplay; }
 }
 
@@ -628,12 +660,36 @@ function addAccount(){
   if(!currentUserIsAdmin){ alert("Only admins can add accounts."); return; }
   const rawId = document.getElementById('acc-discordid').value.trim();
   const password = document.getElementById('acc-password').value;
+  const displayName = document.getElementById('acc-displayname').value.trim();
   const isAdmin = document.getElementById('acc-isadmin').checked;
   if(!rawId || !password){ alert("Discord ID and password are required."); return; }
-  createAccount(sanitizeId(rawId), rawId, password, isAdmin);
+  createAccount(sanitizeId(rawId), rawId, password, isAdmin, null, null, displayName);
   document.getElementById('acc-discordid').value = '';
+  document.getElementById('acc-displayname').value = '';
   document.getElementById('acc-password').value = '';
   document.getElementById('acc-isadmin').checked = false;
+}
+
+async function renameAccount(id, currentName){
+  if(!currentUserIsAdmin){ alert("Only admins can rename accounts."); return; }
+  const input = prompt("Display name for this account:", currentName || '');
+  if(input === null) return;
+  const name = input.trim();
+  const target = AUTH_USERS.find(u=>u.id===id);
+  if(cloudEnabled){
+    try{ await db.collection(AUTH_COLLECTION).doc(id).set({ displayName: name }, { merge:true }); }
+    catch(e){ console.error(e); }
+  } else {
+    const rec = AUTH_USERS.find(u=>u.id===id);
+    if(rec){ rec.displayName = name; }
+    saveAuthLocal();
+    renderAccounts();
+  }
+  logAction(null, 'account_rename', target ? target.discordId : id, `display name -> ${name || '(cleared)'}`);
+  if(currentUser === id){
+    currentUserDisplayId = name || (target ? target.discordId : id);
+    document.getElementById('whoDiscord').textContent = currentUserDisplayId + (currentUserIsAdmin ? ' (Admin)' : '');
+  }
 }
 
 async function removeAccount(id){
@@ -681,8 +737,12 @@ function renderAccounts(){
   if(!AUTH_USERS.length){ list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim);">No accounts yet</div>'; return; }
   list.innerHTML = [...AUTH_USERS].sort((a,b)=>a.discordId.localeCompare(b.discordId)).map(u=>`
     <div class="roster-row">
-      <div class="roster-name">${esc(u.discordId)} ${u.isAdmin?'<span class="tag pos">Admin</span>':''}</div>
+      <div>
+        <div class="roster-name">${esc(u.displayName || u.discordId)} ${u.isAdmin?'<span class="tag pos">Admin</span>':''}</div>
+        ${u.displayName ? `<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">${esc(u.discordId)}</div>` : ''}
+      </div>
       <div style="display:flex;align-items:center;gap:8px;">
+        ${currentUserIsAdmin ? `<button class="btn alt small" onclick="renameAccount('${u.id}','${esc(u.displayName||'')}')">Rename</button>` : ''}
         ${currentUserIsAdmin ? `<button class="btn alt small" onclick="toggleAdmin('${u.id}',${!!u.isAdmin})">${u.isAdmin?'Remove admin':'Make admin'}</button>` : ''}
         ${currentUserIsAdmin ? `<button class="btn danger small" onclick="removeAccount('${u.id}')">Remove</button>` : ''}
       </div>
@@ -723,7 +783,7 @@ function restoreSession(){
   const saved = localStorage.getItem('ll_session');
   if(!saved) return;
   const acct = AUTH_USERS.find(u=>u.id===saved);
-  if(acct){ setSession(saved, acct.discordId, !!acct.isAdmin); }
+  if(acct){ setSession(saved, acct.displayName || acct.discordId, !!acct.isAdmin); }
 }
 
 /* ---------- INIT ---------- */
@@ -831,6 +891,7 @@ async function updateRecord(dbKey, col, id, patch){
 }
 
 async function deleteRecord(dbKey, col, id){
+  if(!requireLogin()) return;
   if(!confirm("Delete this entry? This cannot be undone.")) return;
   const rec = DATA[dbKey][col].find(r=>r.id===id);
   if(cloudEnabled){
@@ -855,6 +916,7 @@ function updateTabVisibility(dbKey){
   } else {
     deadlinesTab.style.display = '';
   }
+  populateRankSelect(dbKey);
 }
 document.querySelectorAll('.db-tab').forEach(t=>{
   t.addEventListener('click', ()=>{
@@ -880,29 +942,53 @@ document.querySelectorAll('.tab').forEach(tab=>{
 
 /* ---------- ADMISSIONS ---------- */
 function addAdmission(){
+  if(!requireLogin()) return;
   const username = document.getElementById('a-username').value.trim();
   if(!username){ alert("Username is required."); return; }
   const dbKey = currentDb;
   if(DATA[dbKey].admissions.some(r=>r.username.toLowerCase()===username.toLowerCase())){
     alert("That username is already admitted to "+dbKey.toUpperCase()+"."); return;
   }
-  addRecord(dbKey, 'admissions', { username, dateAdded: todayStr() });
+  const rank = document.getElementById('a-rank').value;
+  addRecord(dbKey, 'admissions', { username, rank, dateAdded: todayStr() });
   addRecord(dbKey, 'quota', { username, complete:false }, username.toLowerCase());
   addRecord(dbKey, 'points', { username, logistical:0, educational:0 }, username.toLowerCase());
-  logAction(dbKey, 'admission_add', username, 'Admitted to '+dbKey.toUpperCase());
+  logAction(dbKey, 'admission_add', username, `Admitted to ${dbKey.toUpperCase()} as ${rank}`);
   document.getElementById('a-username').value = '';
+}
+function populateRankSelect(dbKey){
+  const sel = document.getElementById('a-rank');
+  if(!sel) return;
+  sel.innerHTML = RANKS[dbKey].map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join('');
+}
+function setRank(dbKey, username, rank){
+  if(!requireLogin()) return;
+  const rec = DATA[dbKey].admissions.find(r=>r.username.toLowerCase()===username.toLowerCase());
+  const oldRank = rec ? rec.rank : '';
+  updateRecord(dbKey, 'admissions', rec.id, { rank });
+  if(oldRank !== rank){
+    logAction(dbKey, 'rank_update', username, `rank: ${oldRank||'(none)'} -> ${rank}`);
+  }
 }
 function renderAdmissions(dbKey){
   if(dbKey !== currentDb) return;
   const list = document.getElementById('list-admissions');
-  const rows = [...DATA[dbKey].admissions].sort((a,b)=>a.username.localeCompare(b.username));
+  const term = SEARCH.admissions;
+  const rows = [...DATA[dbKey].admissions]
+    .filter(r=>matches(term, r.username, r.rank))
+    .sort((a,b)=>a.username.localeCompare(b.username));
   document.getElementById('count-admissions').textContent = rows.length + " users";
-  if(!rows.length){ list.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-dim);">No users admitted yet</div>'; return; }
+  if(!rows.length){ list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-dim);">${term?'No matching users':'No users admitted yet'}</div>`; return; }
   list.innerHTML = rows.map(r=>`
     <div class="roster-row">
-      <div class="roster-name">${esc(r.username)}</div>
-      <div style="display:flex;align-items:center;gap:14px;">
-        <span style="font-size:11.5px;color:var(--text-dim);">Added ${fmtDate(r.dateAdded)}</span>
+      <div>
+        <div class="roster-name">${esc(r.username)}</div>
+        <div style="font-size:11.5px;color:var(--text-dim);margin-top:2px;">Added ${fmtDate(r.dateAdded)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <select style="width:auto;font-size:12px;padding:6px 8px;" onchange="setRank('${dbKey}','${esc(r.username)}',this.value)">
+          ${RANKS[dbKey].map(rk=>`<option value="${esc(rk)}" ${r.rank===rk?'selected':''}>${esc(rk)}</option>`).join('')}
+        </select>
         <button class="btn danger small" onclick="deleteRecord('${dbKey}','admissions','${r.id}')">Remove</button>
       </div>
     </div>`).join('');
@@ -910,6 +996,7 @@ function renderAdmissions(dbKey){
 
 /* ---------- POINTS (set value per user, driven by admissions) ---------- */
 function setPoints(dbKey, username, field, value){
+  if(!requireLogin()) return;
   const n = Number(value);
   const patch = { username };
   patch[field] = isNaN(n) ? 0 : n;
@@ -923,10 +1010,13 @@ function setPoints(dbKey, username, field, value){
 function renderPoints(dbKey){
   if(dbKey !== currentDb) return;
   const list = document.getElementById('list-points');
-  const admitted = [...DATA[dbKey].admissions].sort((a,b)=>a.username.localeCompare(b.username));
+  const term = SEARCH.points;
+  const admitted = [...DATA[dbKey].admissions]
+    .filter(a=>matches(term, a.username))
+    .sort((a,b)=>a.username.localeCompare(b.username));
   document.getElementById('count-points').textContent = admitted.length + " users";
   if(!admitted.length){
-    list.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-dim);">No users admitted yet — add users in the Admissions tab first</div>';
+    list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-dim);">${term?'No matching users':'No users admitted yet — add users in the Admissions tab first'}</div>`;
     return;
   }
   list.innerHTML = admitted.map(a=>{
@@ -952,6 +1042,7 @@ function renderPoints(dbKey){
 
 /* ---------- PUNISHMENTS ---------- */
 function addPunishment(){
+  if(!requireLogin()) return;
   const name = document.getElementById('pu-name').value.trim();
   if(!name){ alert("Username is required."); return; }
   const type = document.getElementById('pu-type').value;
@@ -965,9 +1056,12 @@ function addPunishment(){
 function renderPunishments(dbKey){
   if(dbKey !== currentDb) return;
   const tbody = document.getElementById('table-punishments');
-  const rows = [...DATA[dbKey].punishments].sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+  const term = SEARCH.punishments;
+  const rows = [...DATA[dbKey].punishments]
+    .filter(r=>matches(term, r.name, r.type, r.reason, r.issuer, r.duration))
+    .sort((a,b)=> (b.date||'').localeCompare(a.date||''));
   document.getElementById('count-punishments').textContent = rows.length + " entries";
-  if(!rows.length){ tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No punishments logged</td></tr>'; return; }
+  if(!rows.length){ tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${term?'No matching punishments':'No punishments logged'}</td></tr>`; return; }
   tbody.innerHTML = rows.map(r=>`
     <tr>
       <td>${fmtDate(r.date)}</td>
@@ -982,6 +1076,7 @@ function renderPunishments(dbKey){
 
 /* ---------- DEADLINES ---------- */
 function addDeadline(){
+  if(!requireLogin()) return;
   const task = document.getElementById('d-task').value.trim();
   const due = document.getElementById('d-due').value;
   if(!task || !due){ alert("Task and due date are required."); return; }
@@ -993,6 +1088,7 @@ function addDeadline(){
   ['d-task','d-assignee','d-due','d-notes'].forEach(id=>document.getElementById(id).value='');
 }
 function toggleDeadlineStatus(dbKey, id, current){
+  if(!requireLogin()) return;
   const newStatus = current==='Pending' ? 'Complete' : 'Pending';
   const rec = DATA[dbKey].deadlines.find(r=>r.id===id);
   updateRecord(dbKey, 'deadlines', id, { status: newStatus });
@@ -1001,9 +1097,12 @@ function toggleDeadlineStatus(dbKey, id, current){
 function renderDeadlines(dbKey){
   if(dbKey !== currentDb) return;
   const tbody = document.getElementById('table-deadlines');
-  const rows = [...DATA[dbKey].deadlines].sort((a,b)=> (a.due||'').localeCompare(b.due||''));
+  const term = SEARCH.deadlines;
+  const rows = [...DATA[dbKey].deadlines]
+    .filter(r=>matches(term, r.task, r.assignee, r.notes, r.priority, r.status))
+    .sort((a,b)=> (a.due||'').localeCompare(b.due||''));
   document.getElementById('count-deadlines').textContent = rows.length + " entries";
-  if(!rows.length){ tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No rank-up deadlines set</td></tr>'; return; }
+  if(!rows.length){ tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${term?'No matching deadlines':'No rank-up deadlines set'}</td></tr>`; return; }
   const now = todayStr();
   tbody.innerHTML = rows.map(r=>{
     const overdue = r.status!=='Complete' && r.due < now;
@@ -1022,16 +1121,20 @@ function renderDeadlines(dbKey){
 
 /* ---------- QUOTA (driven by admissions) ---------- */
 function toggleQuota(dbKey, username, currentComplete){
+  if(!requireLogin()) return;
   updateRecord(dbKey, 'quota', username.toLowerCase(), { username, complete: !currentComplete });
   logAction(dbKey, 'quota_update', username, `complete: ${currentComplete} -> ${!currentComplete}`);
 }
 function renderQuota(dbKey){
   if(dbKey !== currentDb) return;
   const list = document.getElementById('list-quota');
-  const admitted = [...DATA[dbKey].admissions].sort((a,b)=>a.username.localeCompare(b.username));
+  const term = SEARCH.quota;
+  const admitted = [...DATA[dbKey].admissions]
+    .filter(a=>matches(term, a.username))
+    .sort((a,b)=>a.username.localeCompare(b.username));
   document.getElementById('count-quota').textContent = admitted.length + " users";
   if(!admitted.length){
-    list.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-dim);">No users admitted yet — add users in the Admissions tab first</div>';
+    list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-dim);">${term?'No matching users':'No users admitted yet — add users in the Admissions tab first'}</div>`;
     return;
   }
   list.innerHTML = admitted.map(a=>{
