@@ -6,6 +6,7 @@
 <title>Logistics Ledger</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -598,7 +599,7 @@ async function attemptLogin(){
       return;
     }
     await createAccount(id, rawId, password, true, id, rawId);
-    setSession(id, rawId, true);
+    await setSession(id, rawId, true);
     logAction(null, 'login', id, 'Bootstrap admin account created and logged in');
     return;
   }
@@ -607,7 +608,7 @@ async function attemptLogin(){
   if(!acct){ errEl.textContent = "No account with that Discord ID. Ask an admin to add you under Manage Accounts."; return; }
   const hash = await sha256Hex(acct.salt + password);
   if(hash !== acct.hash){ errEl.textContent = "Incorrect password."; return; }
-  setSession(id, acct.displayName || acct.discordId, !!acct.isAdmin);
+  await setSession(id, acct.displayName || acct.discordId, !!acct.isAdmin);
   logAction(null, 'login', id, 'Logged in');
 }
 
@@ -731,7 +732,28 @@ function toggleAccountsPanel(){
   p.style.display = (p.style.display === 'block') ? 'none' : 'block';
 }
 
-function setSession(id, displayId, isAdmin){
+// This is the ONLY thing Firestore Security Rules can actually trust — it's
+// issued and verified by Firebase itself, not read out of a JS variable or
+// localStorage, so it can't be spoofed from the browser console. It must be
+// established (signInAnonymously) before setSession grants app access, and
+// torn down (signOut) on logout, or the "logged in" state it represents
+// would outlive the session it's supposed to gate.
+async function ensureFirebaseAuth(){
+  if(!cloudEnabled) return true;
+  if(firebase.auth().currentUser) return true;
+  try{
+    await firebase.auth().signInAnonymously();
+    return true;
+  }catch(e){
+    console.error('Firebase auth failed', e);
+    document.getElementById('loginError').textContent = "Could not establish a secure session: "+e.message;
+    return false;
+  }
+}
+
+async function setSession(id, displayId, isAdmin){
+  const ok = await ensureFirebaseAuth();
+  if(!ok) return;
   currentUser = id;
   currentUserIsAdmin = !!isAdmin;
   localStorage.setItem('ll_session', id);
@@ -743,10 +765,13 @@ function setSession(id, displayId, isAdmin){
   renderAccounts();
 }
 
-function logout(){
+async function logout(){
   currentUser = null;
   currentUserIsAdmin = false;
   localStorage.removeItem('ll_session');
+  if(cloudEnabled){
+    try{ await firebase.auth().signOut(); }catch(e){ console.error(e); }
+  }
   document.getElementById('loginGate').style.display = 'flex';
   document.getElementById('appWrap').style.display = 'none';
   document.getElementById('topbar').style.display = 'none';
@@ -756,11 +781,11 @@ function logout(){
   document.getElementById('loginError').textContent = '';
 }
 
-function restoreSession(){
+async function restoreSession(){
   const saved = localStorage.getItem('ll_session');
   if(!saved) return;
   const acct = AUTH_USERS.find(u=>u.id===saved);
-  if(acct){ setSession(saved, acct.displayName || acct.discordId, !!acct.isAdmin); }
+  if(acct){ await setSession(saved, acct.displayName || acct.discordId, !!acct.isAdmin); }
 }
 
 function initFirebase(){
