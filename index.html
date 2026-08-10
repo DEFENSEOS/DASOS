@@ -923,7 +923,7 @@ function addAdmission(){
   }
   const rank = document.getElementById('a-rank').value;
   addRecord(dbKey, 'admissions', { username, rank, dateAdded: todayStr() });
-  addRecord(dbKey, 'quota', { username, complete:false }, username.toLowerCase());
+  addRecord(dbKey, 'quota', { username, complete:false, failure:'None' }, username.toLowerCase());
   addRecord(dbKey, 'points', { username, logistical:0, educational:0 }, username.toLowerCase());
   logAction(dbKey, 'admission_add', username, `Admitted to ${dbKey.toUpperCase()} as ${rank}`);
   document.getElementById('a-username').value = '';
@@ -1093,6 +1093,21 @@ function toggleQuota(dbKey, username, currentComplete){
   updateRecord(dbKey, 'quota', username.toLowerCase(), { username, complete: !currentComplete });
   logAction(dbKey, 'quota_update', username, `complete: ${currentComplete} -> ${!currentComplete}`);
 }
+const QUOTA_FAILURES = ["None","QF1","QF2","Pending Exile"];
+function quotaFailureTagClass(val){
+  if(val==='QF1') return 'warn';
+  if(val==='QF2' || val==='Pending Exile') return 'neg';
+  return 'pos';
+}
+function setQuotaFailure(dbKey, username, value){
+  if(!requireLogin()) return;
+  const qrec = DATA[dbKey].quota.find(q=>q.username.toLowerCase()===username.toLowerCase());
+  const oldVal = qrec && qrec.failure ? qrec.failure : 'None';
+  updateRecord(dbKey, 'quota', username.toLowerCase(), { username, failure: value });
+  if(oldVal !== value){
+    logAction(dbKey, 'quota_failure_update', username, `failure: ${oldVal} -> ${value}`);
+  }
+}
 function renderQuota(dbKey){
   if(dbKey !== currentDb) return;
   const list = document.getElementById('list-quota');
@@ -1108,13 +1123,22 @@ function renderQuota(dbKey){
   list.innerHTML = admitted.map(a=>{
     const qrec = DATA[dbKey].quota.find(q=>q.username.toLowerCase()===a.username.toLowerCase());
     const complete = qrec ? !!qrec.complete : false;
+    const failure = qrec && qrec.failure ? qrec.failure : 'None';
     return `
     <div class="roster-row">
       <div class="roster-name">${esc(a.username)}</div>
-      <div class="check-wrap" onclick="toggleQuota('${dbKey}','${esc(a.username)}',${complete})">
-        <span class="check-label ${complete?'complete':'incomplete'}">${complete?'Quota complete':'Quota incomplete'}</span>
-        <div class="checkbox ${complete?'checked':''}">
-          <svg viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.2 11.5L13 4.5" stroke="#0d0f13" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <div class="check-wrap" onclick="toggleQuota('${dbKey}','${esc(a.username)}',${complete})">
+          <span class="check-label ${complete?'complete':'incomplete'}">${complete?'Quota complete':'Quota incomplete'}</span>
+          <div class="checkbox ${complete?'checked':''}">
+            <svg viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.2 11.5L13 4.5" stroke="#0d0f13" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;">
+          <span class="tag ${quotaFailureTagClass(failure)}">${esc(failure)}</span>
+          <select style="width:auto;font-size:12px;padding:6px 8px;" onchange="setQuotaFailure('${dbKey}','${esc(a.username)}',this.value)">
+            ${QUOTA_FAILURES.map(f=>`<option value="${esc(f)}" ${failure===f?'selected':''}>${esc(f)}</option>`).join('')}
+          </select>
         </div>
       </div>
     </div>`;
