@@ -217,6 +217,72 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
 .search-row{margin:14px 0 16px;}
 .search-row input{max-width:280px;}
 
+.field-error{font-size:11px;color:var(--red);margin-top:4px;display:none;}
+.field-error.show{display:block;}
+input.invalid{border-color:var(--red);}
+.rbx-link{font-size:11px;color:var(--blue);text-decoration:none;}
+.rbx-link:hover{text-decoration:underline;}
+
+/* Side profile-viewer widget */
+#rbxWidget{
+  position:fixed;
+  top:56px;right:20px;
+  width:280px;
+  max-height:calc(100vh - 90px);
+  overflow-y:auto;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:16px;
+  z-index:30;
+}
+#rbxWidget h3{font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px;}
+#rbxWidget .sub{font-size:11px;color:var(--text-dim);margin-bottom:12px;}
+#rbxWidget .btn{width:100%;margin-top:8px;}
+.rbx-toggle{
+  position:fixed;top:56px;right:20px;z-index:31;display:none;
+}
+.rbx-card{margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);}
+.rbx-avatar{width:56px;height:56px;border-radius:10px;background:var(--card2);border:1px solid var(--border);object-fit:cover;display:block;}
+.rbx-head{display:flex;gap:10px;align-items:center;margin-bottom:10px;}
+.rbx-name{font-size:13.5px;font-weight:700;color:var(--text);}
+.rbx-meta{font-size:11px;color:var(--text-dim);margin-top:2px;}
+.rbx-section-title{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-dim);margin:12px 0 6px;}
+.rbx-action{padding:7px 0;border-bottom:1px solid var(--border-soft);font-size:11.5px;}
+.rbx-action:last-child{border-bottom:none;}
+.rbx-action .a-line{color:var(--text-mid);}
+.rbx-action .a-time{color:var(--text-dim);font-size:10.5px;margin-top:2px;}
+.rbx-last-active{
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--card2);border:1px solid var(--border);border-radius:8px;
+  padding:8px 10px;margin-top:2px;font-size:11.5px;
+}
+#rbx-admitted-list{max-height:220px;overflow-y:auto;margin-bottom:4px;}
+.rbx-admitted-row{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:7px 4px;border-bottom:1px solid var(--border-soft);
+  cursor:pointer;font-size:12px;
+}
+.rbx-admitted-row:last-child{border-bottom:none;}
+.rbx-admitted-row:hover{background:var(--card2);border-radius:6px;}
+.rbx-admitted-row .n{color:var(--text);font-weight:600;}
+.rbx-admitted-row .r{color:var(--text-dim);font-size:10.5px;white-space:nowrap;}
+.rbx-admitted-row.no-link{opacity:0.5;cursor:not-allowed;}
+@media (max-width: 1180px){
+  #rbxWidget{
+    position:fixed;top:0;right:0;bottom:0;
+    width:min(320px,86vw);
+    max-height:100vh;
+    border-radius:0;
+    border-left:1px solid var(--border);
+    border-top:none;border-right:none;border-bottom:none;
+    transform:translateX(100%);
+    transition:transform .2s ease;
+  }
+  #rbxWidget.open{transform:translateX(0);}
+  .rbx-toggle{display:block;}
+}
+
 #appWrap{display:none;}
 #topbar{display:none;}
 #accountsPanel{display:none;}
@@ -287,6 +353,19 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
   <div style="max-height:420px;overflow-y:auto;" id="list-auditlog"></div>
 </div>
 
+<button class="btn alt small rbx-toggle" id="rbxToggleBtn" onclick="toggleRbxWidget()" style="display:none;">Profile Viewer</button>
+<div id="rbxWidget" style="display:none;">
+  <h3>Roblox Profile Viewer</h3>
+  <div class="sub">Paste a member's Roblox profile link, or pick from admitted users below.</div>
+  <input id="rbx-link-input" placeholder="https://www.roblox.com/users/12345/profile" oninput="clearFieldError('rbx-link-input')" onkeydown="if(event.key==='Enter') lookupRbxProfile()">
+  <div class="field-error" id="err-rbx-link-input">That doesn't look like a valid Roblox profile link.</div>
+  <button class="btn" onclick="lookupRbxProfile()">View Profile</button>
+  <div class="rbx-section-title" style="margin-top:14px;">Admitted users (<span id="rbx-admitted-count">0</span>)</div>
+  <input id="rbx-admitted-search" placeholder="Search admitted users…" oninput="renderRbxAdmittedList()" style="margin-bottom:8px;">
+  <div id="rbx-admitted-list"></div>
+  <div id="rbx-widget-result"></div>
+</div>
+
 <div class="wrap" id="appWrap">
 
   <div class="pill-row">
@@ -314,6 +393,7 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
     <div class="tab" data-tab="punishments">Punishments</div>
     <div class="tab" data-tab="deadlines" id="tab-deadlines">Rank-Ups</div>
     <div class="tab" data-tab="quota">Quota Sheet</div>
+    <div class="tab" data-tab="profile">Profile</div>
   </div>
 
     <div class="panel active" id="panel-admissions">
@@ -321,6 +401,11 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
     <div class="form-row">
       <div><label>Username</label><input id="a-username" placeholder="Username"></div>
       <div><label>Rank</label><select id="a-rank"></select></div>
+      <div>
+        <label>Roblox Profile Link</label>
+        <input id="a-robloxlink" placeholder="https://www.roblox.com/users/12345/profile" oninput="clearFieldError('a-robloxlink')">
+        <div class="field-error" id="err-a-robloxlink">Enter a valid Roblox profile link, e.g. https://www.roblox.com/users/12345678/profile</div>
+      </div>
     </div>
     <button class="btn" onclick="addAdmission()">+ Add User</button>
     <div class="search-row"><input type="search" placeholder="Search users…" oninput="setSearch('admissions', this.value)"></div>
@@ -357,7 +442,7 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
     <div class="search-row"><input type="search" placeholder="Search punishments…" oninput="setSearch('punishments', this.value)"></div>
     <div style="overflow-x:auto;">
     <table>
-      <thead><tr><th>Date</th><th>Username</th><th>Type</th><th>Duration</th><th>Reason</th><th>Issued by</th><th></th></tr></thead>
+      <thead><tr><th>Date</th><th>Username</th><th>Type</th><th>Duration</th><th>Status</th><th>Reason</th><th>Issued by</th><th></th></tr></thead>
       <tbody id="table-punishments"></tbody>
     </table>
     </div>
@@ -392,6 +477,12 @@ footer{margin-top:36px;font-size:11.5px;color:var(--text-dim);}
     <div id="list-quota"></div>
   </div>
 
+    <div class="panel" id="panel-profile">
+    <div class="panel-head"><h2>User Profile</h2><span class="count" id="count-profile"></span></div>
+    <div class="search-row"><input type="search" id="profile-search" placeholder="Search a username…" oninput="setProfileSearch(this.value)"></div>
+    <div id="profile-results"></div>
+  </div>
+
 </div>
 
 <script>
@@ -420,6 +511,10 @@ const RANKS = {
   ard: ["Operations Cadet","Junior Operations Specialist","Operations Specialist","Senior Operations Specialist","Junior Operations Officer","Operations Officer","Senior Operations Officer","Head Coordination Officer","Executive Division Manager","Lead Division Manager","Assistant Chief of Academic and Research","Deputy Chief of Academic and Research","Chief of Academic and Research"]
 };
 let SEARCH = { admissions:'', points:'', punishments:'', deadlines:'', quota:'', auditlog:'' };
+// UI-only selection state for bulk actions — not persisted, keyed by lowercase username.
+let SELECTED = { admissions: new Set(), quota: new Set() };
+let profileSearchTerm = '';
+let profileSelectedUser = null;
 function setSearch(key, val){
   SEARCH[key] = val.trim().toLowerCase();
   if(key==='auditlog'){ renderAuditLog(); } else { renderPanel(currentDb, key); }
@@ -762,6 +857,9 @@ async function setSession(id, displayId, isAdmin){
   document.getElementById('topbar').style.display = 'flex';
   document.getElementById('whoDiscord').textContent = (displayId || id) + (currentUserIsAdmin ? ' (Admin)' : '');
   document.getElementById('manageAccBtn').style.display = currentUserIsAdmin ? '' : 'none';
+  document.getElementById('rbxWidget').style.display = 'block';
+  document.getElementById('rbxToggleBtn').style.display = 'block';
+  renderRbxAdmittedList();
   renderAccounts();
 }
 
@@ -776,6 +874,9 @@ async function logout(){
   document.getElementById('appWrap').style.display = 'none';
   document.getElementById('topbar').style.display = 'none';
   document.getElementById('accountsPanel').style.display = 'none';
+  document.getElementById('rbxWidget').style.display = 'none';
+  document.getElementById('rbxWidget').classList.remove('open');
+  document.getElementById('rbxToggleBtn').style.display = 'none';
   document.getElementById('login-discordid').value = '';
   document.getElementById('login-password').value = '';
   document.getElementById('loginError').textContent = '';
@@ -906,6 +1007,12 @@ async function deleteRecord(dbKey, col, id){
 }
 
 function updateTabVisibility(dbKey){
+  SELECTED.admissions.clear();
+  SELECTED.quota.clear();
+  profileSelectedUser = null;
+  profileSearchTerm = '';
+  const searchInput = document.getElementById('profile-search');
+  if(searchInput) searchInput.value = '';
   const deadlinesTab = document.getElementById('tab-deadlines');
   if(dbKey === 'ard'){
     deadlinesTab.style.display = 'none';
@@ -938,6 +1045,25 @@ document.querySelectorAll('.tab').forEach(tab=>{
   });
 });
 
+function parseRobloxProfileLink(raw){
+  if(!raw) return null;
+  const s = raw.trim();
+  const m = s.match(/^https?:\/\/(www\.)?roblox\.com\/users\/(\d+)\/profile(\/.*)?(\?.*)?$/i);
+  if(!m) return null;
+  return { userId: m[2], url: `https://www.roblox.com/users/${m[2]}/profile` };
+}
+function showFieldError(inputId){
+  const inp = document.getElementById(inputId);
+  const err = document.getElementById('err-'+inputId);
+  if(inp) inp.classList.add('invalid');
+  if(err) err.classList.add('show');
+}
+function clearFieldError(inputId){
+  const inp = document.getElementById(inputId);
+  const err = document.getElementById('err-'+inputId);
+  if(inp) inp.classList.remove('invalid');
+  if(err) err.classList.remove('show');
+}
 function addAdmission(){
   if(!requireLogin()) return;
   const username = document.getElementById('a-username').value.trim();
@@ -946,12 +1072,21 @@ function addAdmission(){
   if(DATA[dbKey].admissions.some(r=>r.username.toLowerCase()===username.toLowerCase())){
     alert("That username is already admitted to "+dbKey.toUpperCase()+"."); return;
   }
+  const linkRaw = document.getElementById('a-robloxlink').value.trim();
+  const parsed = parseRobloxProfileLink(linkRaw);
+  if(!parsed){
+    showFieldError('a-robloxlink');
+    alert("A valid Roblox profile link is required (e.g. https://www.roblox.com/users/12345678/profile).");
+    return;
+  }
+  clearFieldError('a-robloxlink');
   const rank = document.getElementById('a-rank').value;
-  addRecord(dbKey, 'admissions', { username, rank, dateAdded: todayStr() });
+  addRecord(dbKey, 'admissions', { username, rank, dateAdded: todayStr(), robloxLink: parsed.url, robloxId: parsed.userId });
   addRecord(dbKey, 'quota', { username, complete:false, failure:'None' }, username.toLowerCase());
   addRecord(dbKey, 'points', { username, logistical:0, educational:0 }, username.toLowerCase());
-  logAction(dbKey, 'admission_add', username, `Admitted to ${dbKey.toUpperCase()} as ${rank}`);
+  logAction(dbKey, 'admission_add', username, `Admitted to ${dbKey.toUpperCase()} as ${rank} (${parsed.url})`);
   document.getElementById('a-username').value = '';
+  document.getElementById('a-robloxlink').value = '';
 }
 function populateRankSelect(dbKey){
   const sel = document.getElementById('a-rank');
@@ -967,6 +1102,110 @@ function setRank(dbKey, username, rank){
     logAction(dbKey, 'rank_update', username, `rank: ${oldRank||'(none)'} -> ${rank}`);
   }
 }
+function renderBulkBar(panel, dbKey, rows){
+  const set = SELECTED[panel];
+  const allSelected = rows.length>0 && rows.every(r=>set.has(r.username.toLowerCase()));
+  let actions = '';
+  if(panel==='admissions'){
+    actions = `
+      <select id="bulk-rank-select" style="width:auto;font-size:12px;padding:6px 8px;">
+        ${RANKS[dbKey].map(rk=>`<option value="${esc(rk)}">${esc(rk)}</option>`).join('')}
+      </select>
+      <button class="btn alt small" onclick="bulkSetRank('${dbKey}')">Set rank</button>
+      <button class="btn danger small" onclick="bulkRemoveAdmissions('${dbKey}')">Remove selected</button>`;
+  } else if(panel==='quota'){
+    actions = `
+      <button class="btn alt small" onclick="bulkSetQuotaComplete('${dbKey}',true)">Mark complete</button>
+      <button class="btn alt small" onclick="bulkSetQuotaComplete('${dbKey}',false)">Mark incomplete</button>
+      <button class="btn alt small" onclick="bulkResetQuotaFailure('${dbKey}')">Reset failure</button>`;
+  }
+  return `
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:9px 2px;border-bottom:1px solid var(--border-soft);">
+    <div class="check-wrap" onclick="toggleSelectAll('${panel}','${dbKey}')">
+      <div class="checkbox ${allSelected?'checked':''}">
+        <svg viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.2 11.5L13 4.5" stroke="#0d0f13" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <span class="check-label incomplete">${set.size ? set.size+' selected' : 'Select all'}</span>
+    </div>
+    ${set.size ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${actions}</div>` : ''}
+  </div>`;
+}
+function toggleSelect(panel, username){
+  const key = username.toLowerCase();
+  const set = SELECTED[panel];
+  if(set.has(key)) set.delete(key); else set.add(key);
+  renderPanel(currentDb, panel);
+}
+function toggleSelectAll(panel, dbKey){
+  const rows = DATA[dbKey].admissions;
+  const set = SELECTED[panel];
+  const allSelected = rows.length>0 && rows.every(r=>set.has(r.username.toLowerCase()));
+  if(allSelected) rows.forEach(r=>set.delete(r.username.toLowerCase()));
+  else rows.forEach(r=>set.add(r.username.toLowerCase()));
+  renderPanel(dbKey, panel);
+}
+async function bulkSetRank(dbKey){
+  if(!requireLogin()) return;
+  const set = SELECTED.admissions;
+  if(!set.size){ alert('No users selected.'); return; }
+  const rank = document.getElementById('bulk-rank-select').value;
+  if(!confirm(`Set rank to "${rank}" for ${set.size} user(s)?`)) return;
+  for(const uname of [...set]){
+    const rec = DATA[dbKey].admissions.find(r=>r.username.toLowerCase()===uname);
+    if(rec && rec.rank !== rank){
+      await updateRecord(dbKey, 'admissions', rec.id, { rank });
+      logAction(dbKey, 'rank_update', rec.username, `rank: ${rec.rank} -> ${rank} (bulk)`);
+    }
+  }
+  SELECTED.admissions.clear();
+  renderPanel(dbKey, 'admissions');
+}
+async function bulkRemoveAdmissions(dbKey){
+  if(!requireLogin()) return;
+  const set = SELECTED.admissions;
+  if(!set.size){ alert('No users selected.'); return; }
+  if(!confirm(`Remove ${set.size} user(s) from ${dbKey.toUpperCase()} admissions? Their points/quota/punishment history is kept.`)) return;
+  for(const uname of [...set]){
+    const rec = DATA[dbKey].admissions.find(r=>r.username.toLowerCase()===uname);
+    if(!rec) continue;
+    if(cloudEnabled){
+      try{ await db.collection(colName(dbKey,'admissions')).doc(rec.id).delete(); }
+      catch(e){ console.error(e); }
+    } else {
+      DATA[dbKey].admissions = DATA[dbKey].admissions.filter(r=>r.id!==rec.id);
+      saveLocal(dbKey,'admissions');
+    }
+    logAction(dbKey, 'admissions_remove', rec.username, 'Removed (bulk)');
+  }
+  SELECTED.admissions.clear();
+  if(!cloudEnabled) renderPanel(dbKey,'admissions');
+}
+async function bulkSetQuotaComplete(dbKey, complete){
+  if(!requireLogin()) return;
+  const set = SELECTED.quota;
+  if(!set.size){ alert('No users selected.'); return; }
+  for(const uname of [...set]){
+    const admission = DATA[dbKey].admissions.find(a=>a.username.toLowerCase()===uname);
+    const username = admission ? admission.username : uname;
+    await updateRecord(dbKey, 'quota', uname, { username, complete });
+  }
+  logAction(dbKey, 'quota_update', `${set.size} user(s)`, `bulk set complete=${complete}`);
+  SELECTED.quota.clear();
+  renderPanel(dbKey, 'quota');
+}
+async function bulkResetQuotaFailure(dbKey){
+  if(!requireLogin()) return;
+  const set = SELECTED.quota;
+  if(!set.size){ alert('No users selected.'); return; }
+  for(const uname of [...set]){
+    const admission = DATA[dbKey].admissions.find(a=>a.username.toLowerCase()===uname);
+    const username = admission ? admission.username : uname;
+    await updateRecord(dbKey, 'quota', uname, { username, failure:'None' });
+  }
+  logAction(dbKey, 'quota_failure_update', `${set.size} user(s)`, 'bulk reset to None');
+  SELECTED.quota.clear();
+  renderPanel(dbKey, 'quota');
+}
 function renderAdmissions(dbKey){
   if(dbKey !== currentDb) return;
   const list = document.getElementById('list-admissions');
@@ -975,12 +1214,22 @@ function renderAdmissions(dbKey){
     .filter(r=>matches(term, r.username, r.rank))
     .sort((a,b)=>a.username.localeCompare(b.username));
   document.getElementById('count-admissions').textContent = rows.length + " users";
-  if(!rows.length){ list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-dim);">${term?'No matching users':'No users admitted yet'}</div>`; return; }
-  list.innerHTML = rows.map(r=>`
+  const validUsernames = new Set(rows.map(r=>r.username.toLowerCase()));
+  [...SELECTED.admissions].forEach(u=>{ if(!validUsernames.has(u)) SELECTED.admissions.delete(u); });
+  const bar = renderBulkBar('admissions', dbKey, rows);
+  if(!rows.length){ list.innerHTML = bar + `<div style="padding:30px;text-align:center;color:var(--text-dim);">${term?'No matching users':'No users admitted yet'}</div>`; return; }
+  list.innerHTML = bar + rows.map(r=>{
+    const sel = SELECTED.admissions.has(r.username.toLowerCase());
+    return `
     <div class="roster-row">
-      <div>
-        <div class="roster-name">${esc(r.username)}</div>
-        <div style="font-size:11.5px;color:var(--text-dim);margin-top:2px;">Added ${fmtDate(r.dateAdded)}</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="checkbox ${sel?'checked':''}" style="cursor:pointer;" onclick="toggleSelect('admissions','${esc(r.username)}')">
+          <svg viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.2 11.5L13 4.5" stroke="#0d0f13" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div>
+          <div class="roster-name">${esc(r.username)}</div>
+          <div style="font-size:11.5px;color:var(--text-dim);margin-top:2px;">Added ${fmtDate(r.dateAdded)}${r.robloxLink?` — <a class="rbx-link" href="${esc(r.robloxLink)}" target="_blank" rel="noopener">Roblox profile</a>`:''}</div>
+        </div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
         <select style="width:auto;font-size:12px;padding:6px 8px;" onchange="setRank('${dbKey}','${esc(r.username)}',this.value)">
@@ -988,7 +1237,8 @@ function renderAdmissions(dbKey){
         </select>
         <button class="btn danger small" onclick="deleteRecord('${dbKey}','admissions','${r.id}')">Remove</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function setPoints(dbKey, username, field, value){
@@ -1048,6 +1298,33 @@ function addPunishment(){
   logAction(currentDb, 'punishment_add', name, `${type}${duration?' — '+duration:''}${reason?' — '+reason:''}`);
   ['pu-name','pu-duration','pu-reason','pu-issuer'].forEach(id=>document.getElementById(id).value='');
 }
+// Parses free-text duration ("7 days", "2 weeks", "permanent") into a day
+// count. Returns null when it can't confidently parse the text — those
+// entries fall back to '—' rather than guessing.
+function parseDurationDays(duration){
+  if(!duration) return null;
+  const d = String(duration).trim().toLowerCase();
+  if(/^(permanent|perm|indefinite|life|forever)$/.test(d)) return Infinity;
+  const m = d.match(/^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|d|day|days|w|wk|wks|week|weeks|mo|mos|month|months)$/);
+  if(!m) return null;
+  const n = parseFloat(m[1]);
+  const unit = m[2];
+  if(unit.startsWith('h')) return n/24;
+  if(unit.startsWith('d')) return n;
+  if(unit.startsWith('w')) return n*7;
+  if(unit.startsWith('mo')) return n*30;
+  return null;
+}
+function punishmentStatus(r){
+  if(!r.duration) return { label:'—', cls:'' };
+  const days = parseDurationDays(r.duration);
+  if(days === null) return { label:'—', cls:'' };
+  if(days === Infinity) return { label:'Permanent', cls:'neg' };
+  const start = new Date(r.date+'T00:00:00');
+  if(isNaN(start.getTime())) return { label:'—', cls:'' };
+  const expiry = new Date(start.getTime() + days*86400000);
+  return new Date() >= expiry ? { label:'Expired', cls:'pos' } : { label:'Active', cls:'warn' };
+}
 function renderPunishments(dbKey){
   if(dbKey !== currentDb) return;
   const tbody = document.getElementById('table-punishments');
@@ -1056,17 +1333,20 @@ function renderPunishments(dbKey){
     .filter(r=>matches(term, r.name, r.type, r.reason, r.issuer, r.duration))
     .sort((a,b)=> (b.date||'').localeCompare(a.date||''));
   document.getElementById('count-punishments').textContent = rows.length + " entries";
-  if(!rows.length){ tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${term?'No matching punishments':'No punishments logged'}</td></tr>`; return; }
-  tbody.innerHTML = rows.map(r=>`
+  if(!rows.length){ tbody.innerHTML = `<tr class="empty-row"><td colspan="8">${term?'No matching punishments':'No punishments logged'}</td></tr>`; return; }
+  tbody.innerHTML = rows.map(r=>{
+    const st = punishmentStatus(r);
+    return `
     <tr>
       <td>${fmtDate(r.date)}</td>
       <td>${esc(r.name)}</td>
       <td><span class="tag neg">${esc(r.type)}</span></td>
       <td>${esc(r.duration)||'—'}</td>
+      <td>${st.cls ? `<span class="tag ${st.cls}">${esc(st.label)}</span>` : '—'}</td>
       <td>${esc(r.reason)||'—'}</td>
       <td>${esc(r.issuer)||'—'}</td>
       <td class="actions"><button class="btn danger small" onclick="deleteRecord('${dbKey}','punishments','${r.id}')">Del</button></td>
-    </tr>`).join('');
+    </tr>`;}).join('');
 }
 
 function addDeadline(){
@@ -1141,17 +1421,26 @@ function renderQuota(dbKey){
     .filter(a=>matches(term, a.username))
     .sort((a,b)=>a.username.localeCompare(b.username));
   document.getElementById('count-quota').textContent = admitted.length + " users";
+  const validUsernames = new Set(DATA[dbKey].admissions.map(a=>a.username.toLowerCase()));
+  [...SELECTED.quota].forEach(u=>{ if(!validUsernames.has(u)) SELECTED.quota.delete(u); });
+  const bar = renderBulkBar('quota', dbKey, admitted);
   if(!admitted.length){
-    list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-dim);">${term?'No matching users':'No users admitted yet — add users in the Admissions tab first'}</div>`;
+    list.innerHTML = bar + `<div style="padding:30px;text-align:center;color:var(--text-dim);">${term?'No matching users':'No users admitted yet — add users in the Admissions tab first'}</div>`;
     return;
   }
-  list.innerHTML = admitted.map(a=>{
+  list.innerHTML = bar + admitted.map(a=>{
     const qrec = DATA[dbKey].quota.find(q=>q.username.toLowerCase()===a.username.toLowerCase());
     const complete = qrec ? !!qrec.complete : false;
     const failure = qrec && qrec.failure ? qrec.failure : 'None';
+    const sel = SELECTED.quota.has(a.username.toLowerCase());
     return `
     <div class="roster-row">
-      <div class="roster-name">${esc(a.username)}</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="checkbox ${sel?'checked':''}" style="cursor:pointer;" onclick="toggleSelect('quota','${esc(a.username)}')">
+          <svg viewBox="0 0 16 16" fill="none"><path d="M3 8.5L6.2 11.5L13 4.5" stroke="#0d0f13" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="roster-name">${esc(a.username)}</div>
+      </div>
       <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
         <div class="check-wrap" onclick="toggleQuota('${dbKey}','${esc(a.username)}',${complete})">
           <span class="check-label ${complete?'complete':'incomplete'}">${complete?'Quota complete':'Quota incomplete'}</span>
@@ -1174,12 +1463,198 @@ function esc(s){
   if(s===undefined||s===null) return '';
   return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+function setProfileSearch(val){
+  profileSearchTerm = val.trim();
+  profileSelectedUser = null;
+  renderProfile(currentDb);
+}
+function selectProfileUser(username){
+  profileSelectedUser = username;
+  renderProfile(currentDb);
+}
+function clearProfileSelection(){
+  profileSelectedUser = null;
+  renderProfile(currentDb);
+}
+function renderProfile(dbKey){
+  if(dbKey !== currentDb) return;
+  const el = document.getElementById('profile-results');
+  const countEl = document.getElementById('count-profile');
+  if(!el || !countEl) return;
+  const admissions = DATA[dbKey].admissions;
+  if(profileSelectedUser && !admissions.some(a=>a.username.toLowerCase()===profileSelectedUser.toLowerCase())){
+    profileSelectedUser = null;
+  }
+  if(profileSelectedUser){
+    const username = profileSelectedUser;
+    const admission = admissions.find(a=>a.username.toLowerCase()===username.toLowerCase());
+    const points = DATA[dbKey].points.find(p=>p.username.toLowerCase()===username.toLowerCase());
+    const qrec = DATA[dbKey].quota.find(q=>q.username.toLowerCase()===username.toLowerCase());
+    const punishments = DATA[dbKey].punishments
+      .filter(p=>p.name.toLowerCase()===username.toLowerCase())
+      .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    const deadlines = DATA[dbKey].deadlines
+      .filter(d=>d.assignee && d.assignee.toLowerCase()===username.toLowerCase())
+      .sort((a,b)=>(a.due||'').localeCompare(b.due||''));
+    const complete = qrec ? !!qrec.complete : false;
+    const failure = qrec && qrec.failure ? qrec.failure : 'None';
+    countEl.textContent = '';
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div class="roster-name" style="font-size:16px;">${esc(admission.username)}</div>
+        <button class="btn alt small" onclick="clearProfileSelection()">‹ Back to search</button>
+      </div>
+      <div class="form-row" style="margin-bottom:16px;">
+        <div><label>Rank</label><div style="color:var(--text);font-weight:600;">${esc(admission.rank)}</div></div>
+        <div><label>Admitted</label><div style="color:var(--text);font-weight:600;">${fmtDate(admission.dateAdded)}</div></div>
+        <div><label>Logistical pts</label><div style="color:var(--text);font-weight:600;">${points&&typeof points.logistical==='number'?points.logistical:0}</div></div>
+        <div><label>Educational pts</label><div style="color:var(--text);font-weight:600;">${points&&typeof points.educational==='number'?points.educational:0}</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+        <span class="tag ${complete?'pos':'warn'}">${complete?'Quota complete':'Quota incomplete'}</span>
+        <span class="tag ${quotaFailureTagClass(failure)}">${esc(failure)}</span>
+      </div>
+      <div style="margin-bottom:4px;font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px;">Punishment history (${punishments.length})</div>
+      ${punishments.length ? punishments.map(r=>{
+        const st = punishmentStatus(r);
+        return `<div class="roster-row"><div><div style="color:var(--text);font-weight:500;">${esc(r.type)} ${st.cls?`<span class="tag ${st.cls}" style="margin-left:6px;">${esc(st.label)}</span>`:''}</div><div style="font-size:11.5px;color:var(--text-dim);margin-top:2px;">${fmtDate(r.date)}${r.duration?' — '+esc(r.duration):''}${r.reason?' — '+esc(r.reason):''}</div></div></div>`;
+      }).join('') : `<div style="padding:14px 2px;color:var(--text-dim);font-size:12.5px;">No punishments on record</div>`}
+      <div style="margin:20px 0 4px;font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px;">Rank-up deadlines (${deadlines.length})</div>
+      ${deadlines.length ? deadlines.map(r=>`<div class="roster-row"><div><div style="color:var(--text);font-weight:500;">${esc(r.task)}</div><div style="font-size:11.5px;color:var(--text-dim);margin-top:2px;">Due ${fmtDate(r.due)} — ${esc(r.priority)}</div></div><span class="tag ${r.status==='Complete'?'pos':'warn'}">${esc(r.status)}</span></div>`).join('') : `<div style="padding:14px 2px;color:var(--text-dim);font-size:12.5px;">No deadlines on record</div>`}
+    `;
+    return;
+  }
+  const term = profileSearchTerm;
+  if(!term){
+    countEl.textContent = '';
+    el.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-dim);">Start typing a username to pull up their full record</div>`;
+    return;
+  }
+  const found = admissions
+    .filter(a=>a.username.toLowerCase().includes(term.toLowerCase()))
+    .sort((a,b)=>a.username.localeCompare(b.username));
+  countEl.textContent = found.length + ' match' + (found.length===1?'':'es');
+  if(!found.length){
+    el.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-dim);">No users match "${esc(term)}"</div>`;
+    return;
+  }
+  el.innerHTML = found.map(a=>`<div class="roster-row" style="cursor:pointer;" onclick="selectProfileUser('${esc(a.username)}')"><div class="roster-name">${esc(a.username)}</div><span class="tag pos">${esc(a.rank)}</span></div>`).join('');
+}
+function toggleRbxWidget(){
+  document.getElementById('rbxWidget').classList.toggle('open');
+}
+function relativeTime(iso){
+  if(!iso) return 'Never';
+  const d = new Date(iso);
+  if(isNaN(d)) return 'Never';
+  const diffMs = Date.now() - d.getTime();
+  const mins = Math.floor(diffMs/60000);
+  if(mins < 1) return 'Just now';
+  if(mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins/60);
+  if(hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs/24);
+  if(days < 30) return days + 'd ago';
+  return fmtDate(iso);
+}
+function findAdmissionByRobloxId(userId){
+  for(const dbKey of DATABASES){
+    const rec = DATA[dbKey].admissions.find(a=>a.robloxId===userId);
+    if(rec) return { dbKey, rec };
+  }
+  return null;
+}
+function renderRbxAdmittedList(){
+  const listEl = document.getElementById('rbx-admitted-list');
+  const countEl = document.getElementById('rbx-admitted-count');
+  if(!listEl || !countEl) return;
+  const searchInput = document.getElementById('rbx-admitted-search');
+  const term = searchInput ? searchInput.value.trim().toLowerCase() : '';
+  const rows = [...DATA[currentDb].admissions]
+    .filter(a=> !term || a.username.toLowerCase().includes(term) || (a.rank||'').toLowerCase().includes(term))
+    .sort((a,b)=>a.username.localeCompare(b.username));
+  countEl.textContent = rows.length;
+  if(!rows.length){
+    listEl.innerHTML = `<div class="rbx-meta" style="padding:8px 2px;">${term?'No matching users':'No users admitted yet'}</div>`;
+    return;
+  }
+  listEl.innerHTML = rows.map(r=>{
+    const hasLink = !!r.robloxId;
+    return `
+    <div class="rbx-admitted-row ${hasLink?'':'no-link'}" title="${hasLink?'View profile':'No Roblox link on file'}" onclick="${hasLink?`selectRbxAdmitted('${currentDb}','${esc(r.robloxId)}')`:''}">
+      <span class="n">${esc(r.username)}</span>
+      <span class="r">${esc(r.rank)}</span>
+    </div>`;
+  }).join('');
+}
+function selectRbxAdmitted(dbKey, robloxId){
+  const input = document.getElementById('rbx-link-input');
+  const url = `https://www.roblox.com/users/${robloxId}/profile`;
+  input.value = url;
+  clearFieldError('rbx-link-input');
+  renderRbxProfileResult(robloxId);
+}
+function lookupRbxProfile(){
+  const input = document.getElementById('rbx-link-input');
+  const raw = input.value.trim();
+  const parsed = parseRobloxProfileLink(raw);
+  if(!parsed){
+    showFieldError('rbx-link-input');
+    document.getElementById('rbx-widget-result').innerHTML = '';
+    return;
+  }
+  clearFieldError('rbx-link-input');
+  renderRbxProfileResult(parsed.userId);
+}
+function renderRbxProfileResult(robloxUserId){
+  const result = document.getElementById('rbx-widget-result');
+  const url = `https://www.roblox.com/users/${robloxUserId}/profile`;
+  const match = findAdmissionByRobloxId(robloxUserId);
+  if(!match){
+    result.innerHTML = `
+      <div class="rbx-card">
+        <div class="rbx-meta">No ledger record is linked to this Roblox profile.</div>
+        <a class="rbx-link" href="${esc(url)}" target="_blank" rel="noopener">Open Roblox profile ↗</a>
+      </div>`;
+    return;
+  }
+  const { dbKey, rec } = match;
+  const username = rec.username;
+  const relatedEntries = AUDIT_LOG
+    .filter(e => e.dbKey === dbKey && (String(e.target||'').toLowerCase() === username.toLowerCase()))
+    .sort((a,b)=> (b.ts||'').localeCompare(a.ts||''));
+  const lastActiveTs = relatedEntries.length ? relatedEntries[0].ts : null;
+  const recent = relatedEntries.slice(0, 8);
+  result.innerHTML = `
+    <div class="rbx-card">
+      <div class="rbx-head">
+        <img class="rbx-avatar" alt="" src="https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${esc(robloxUserId)}&size=150x150&format=Png" onerror="this.style.display='none'">
+        <div>
+          <div class="rbx-name">${esc(username)}</div>
+          <div class="rbx-meta">${esc(rec.rank)} · ${dbKey.toUpperCase()}</div>
+          <a class="rbx-link" href="${esc(url)}" target="_blank" rel="noopener">Roblox profile ↗</a>
+        </div>
+      </div>
+      <div class="rbx-last-active">
+        <span style="color:var(--text-dim);">Last active</span>
+        <span style="color:var(--text);font-weight:600;">${esc(relativeTime(lastActiveTs))}</span>
+      </div>
+      <div class="rbx-section-title">Recent actions (${relatedEntries.length})</div>
+      ${recent.length ? recent.map(e=>`
+        <div class="rbx-action">
+          <div class="a-line">${esc(e.actorDisplay||e.actor)} — ${esc(e.action)}${e.details?': '+esc(e.details):''}</div>
+          <div class="a-time">${fmtDateTime(e.ts)}</div>
+        </div>`).join('') : `<div class="rbx-meta">No logged actions for this user yet.</div>`}
+    </div>`;
+}
 function renderPanel(dbKey, col){
+  if(col==='admissions' && dbKey===currentDb) renderRbxAdmittedList();
   if(col==='admissions') renderAdmissions(dbKey);
   if(col==='points') renderPoints(dbKey);
   if(col==='punishments') renderPunishments(dbKey);
   if(col==='deadlines') renderDeadlines(dbKey);
   if(col==='quota') renderQuota(dbKey);
+  renderProfile(dbKey);
 }
 function renderAll(){
   DATABASES.forEach(dbKey=> COLLECTIONS.forEach(col=> renderPanel(dbKey,col)) );
