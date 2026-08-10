@@ -199,6 +199,20 @@ td:first-child{color:var(--text);font-weight:500;}
 .tag.pos{color:var(--green);background:var(--green-soft);}
 .tag.neg{color:var(--red);background:var(--red-soft);}
 .tag.warn{color:var(--amber);background:var(--amber-soft);}
+.tag.info{color:var(--blue);background:var(--blue-soft);}
+
+.cat-filter{display:flex;gap:6px;margin:14px 0 4px;flex-wrap:wrap;}
+.cat-filter .tab{padding:6px 12px;font-size:11.5px;}
+.team-card{padding:12px 2px;border-bottom:1px solid var(--border-soft);}
+.team-card:last-child{border-bottom:none;}
+.team-card summary{cursor:pointer;font-size:11.5px;color:var(--text-dim);list-style:none;display:flex;align-items:center;gap:5px;margin-top:8px;}
+.team-card summary::-webkit-details-marker{display:none;}
+.team-card summary::before{content:'▸';font-size:9px;color:var(--text-dim);transition:transform .15s;}
+.team-card details[open] summary::before{transform:rotate(90deg);}
+.team-activity-row{padding:6px 0;border-bottom:1px solid var(--border-soft);font-size:12px;}
+.team-activity-row:last-child{border-bottom:none;}
+.team-group-label{font-size:11px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;margin:18px 0 2px;}
+.team-group-label:first-child{margin-top:4px;}
 .empty-row td{text-align:center;color:var(--text-dim);font-size:13px;padding:26px;}
 .actions{display:flex;gap:6px;}
 
@@ -343,6 +357,7 @@ input.invalid{border-color:var(--red);}
 <div class="topbar" id="topbar">
   <div class="who">Logged in as <strong id="whoDiscord"></strong></div>
   <div class="topbar-actions">
+    <button class="btn alt small" onclick="toggleTeamPanel()">Team</button>
     <button class="btn alt small" onclick="toggleAuditPanel()">Audit Log</button>
     <button class="btn alt small" id="manageAccBtn" onclick="toggleAccountsPanel()">Manage Accounts</button>
     <button class="btn danger small" onclick="logout()">Log Out</button>
@@ -356,6 +371,7 @@ input.invalid{border-color:var(--red);}
       <div><label>Discord ID</label><input id="acc-discordid" placeholder="Their Discord ID"></div>
       <div><label>Display Name</label><input id="acc-displayname" placeholder="Name to show (optional)"></div>
       <div><label>Password</label><input id="acc-password" type="password" placeholder="Set a password"></div>
+      <div><label>Category</label><input id="acc-category" placeholder="e.g. Leadership, Moderator"></div>
     </div>
     <label style="display:flex;align-items:center;gap:7px;margin-bottom:10px;cursor:pointer;">
       <input type="checkbox" id="acc-isadmin" style="width:auto;">
@@ -370,6 +386,14 @@ input.invalid{border-color:var(--red);}
   <div class="panel-head"><h2>Audit Log</h2><span class="count" id="count-auditlog">0 entries</span></div>
   <div class="search-row"><input type="search" placeholder="Search actor, action, target, details…" oninput="setSearch('auditlog', this.value)"></div>
   <div style="max-height:420px;overflow-y:auto;" id="list-auditlog"></div>
+</div>
+
+<div class="accounts-panel" id="teamPanel" style="display:none;">
+  <div class="panel-head"><h2>Team &amp; Access</h2><span class="count" id="count-team">0 editors</span></div>
+  <div style="font-size:12px;color:var(--text-dim);margin-bottom:2px;">Everyone below has a login and can edit the database. Categorize staff, promote/demote admins, and check who's been active in the last 24 hours.</div>
+  <div class="search-row"><input type="search" id="team-search" placeholder="Search name, Discord ID, category…" oninput="renderTeam()"></div>
+  <div class="cat-filter" id="team-cat-filter"></div>
+  <div style="max-height:520px;overflow-y:auto;margin-top:8px;" id="list-team"></div>
 </div>
 
 <button class="btn alt small rbx-toggle" id="rbxToggleBtn" onclick="toggleRbxWidget()" style="display:none;">Profile Viewer</button>
@@ -634,6 +658,7 @@ function renderAuditLog(){
       </div>
       <div style="font-size:11px;color:var(--text-dim);white-space:nowrap;">${fmtDateTime(r.ts)}</div>
     </div>`).join('');
+  renderTeam();
 }
 function fmtDateTime(iso){
   if(!iso) return '—';
@@ -726,10 +751,10 @@ async function attemptLogin(){
   logAction(null, 'login', id, 'Logged in');
 }
 
-async function createAccount(id, displayId, password, isAdmin, actorId, actorDisplay, displayName){
+async function createAccount(id, displayId, password, isAdmin, actorId, actorDisplay, displayName, category){
   const salt = genSalt();
   const hash = await sha256Hex(salt + password);
-  const record = { discordId: displayId, displayName: displayName || '', salt, hash, isAdmin: !!isAdmin, createdAt: todayStr() };
+  const record = { discordId: displayId, displayName: displayName || '', salt, hash, isAdmin: !!isAdmin, category: category || '', createdAt: todayStr() };
   const wasExisting = AUTH_USERS.some(u=>u.id===id);
   if(cloudEnabled){
     try{ await db.collection(AUTH_COLLECTION).doc(id).set(record); }
@@ -753,13 +778,33 @@ function addAccount(){
   const rawId = document.getElementById('acc-discordid').value.trim();
   const password = document.getElementById('acc-password').value;
   const displayName = document.getElementById('acc-displayname').value.trim();
+  const category = document.getElementById('acc-category').value.trim();
   const isAdmin = document.getElementById('acc-isadmin').checked;
   if(!rawId || !password){ alert("Discord ID and password are required."); return; }
-  createAccount(sanitizeId(rawId), rawId, password, isAdmin, null, null, displayName);
+  createAccount(sanitizeId(rawId), rawId, password, isAdmin, null, null, displayName, category);
   document.getElementById('acc-discordid').value = '';
   document.getElementById('acc-displayname').value = '';
   document.getElementById('acc-password').value = '';
+  document.getElementById('acc-category').value = '';
   document.getElementById('acc-isadmin').checked = false;
+}
+
+async function setCategory(id, currentCategory){
+  if(!currentUserIsAdmin){ alert("Only admins can set categories."); return; }
+  const input = prompt("Category for this account (e.g. Leadership, Moderator, Editor, Support):", currentCategory || '');
+  if(input === null) return;
+  const category = input.trim();
+  const target = AUTH_USERS.find(u=>u.id===id);
+  if(cloudEnabled){
+    try{ await db.collection(AUTH_COLLECTION).doc(id).set({ category }, { merge:true }); }
+    catch(e){ console.error(e); }
+  } else {
+    const rec = AUTH_USERS.find(u=>u.id===id);
+    if(rec){ rec.category = category; }
+    saveAuthLocal();
+    renderAccounts();
+  }
+  logAction(null, 'category_change', target ? target.discordId : id, `category -> ${category || '(uncategorized)'}`);
 }
 
 async function renameAccount(id, currentName){
@@ -839,11 +884,109 @@ function renderAccounts(){
         ${currentUserIsAdmin ? `<button class="btn danger small" onclick="removeAccount('${u.id}')">Remove</button>` : ''}
       </div>
     </div>`).join('');
+  renderTeam();
 }
 
 function toggleAccountsPanel(){
   const p = document.getElementById('accountsPanel');
   p.style.display = (p.style.display === 'block') ? 'none' : 'block';
+}
+
+function toggleTeamPanel(){
+  const p = document.getElementById('teamPanel');
+  const opening = p.style.display !== 'block';
+  p.style.display = opening ? 'block' : 'none';
+  if(opening) renderTeam();
+}
+
+let teamCategoryFilter = '__all__';
+function selectTeamCategory(cat){
+  teamCategoryFilter = cat;
+  renderTeam();
+}
+
+const DAY_MS = 24*60*60*1000;
+function recentActivityFor(id, discordId){
+  const cutoff = Date.now() - DAY_MS;
+  return AUDIT_LOG
+    .filter(e=>{
+      if(!e.ts) return false;
+      const t = new Date(e.ts).getTime();
+      if(isNaN(t) || t < cutoff) return false;
+      return e.actor === id || (discordId && String(e.actor).toLowerCase() === String(discordId).toLowerCase());
+    })
+    .sort((a,b)=> (b.ts||'').localeCompare(a.ts||''));
+}
+
+function renderTeam(){
+  const list = document.getElementById('list-team');
+  const countEl = document.getElementById('count-team');
+  const filterEl = document.getElementById('team-cat-filter');
+  if(!list || !countEl || !filterEl) return;
+
+  const searchInput = document.getElementById('team-search');
+  const term = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+  const users = [...AUTH_USERS].map(u=>{
+    const category = (u.category || '').trim() || 'Uncategorized';
+    const activity = recentActivityFor(u.id, u.discordId);
+    return { ...u, category, activity };
+  });
+
+  // Category filter pills
+  const categories = [...new Set(users.map(u=>u.category))].sort((a,b)=>a.localeCompare(b));
+  if(teamCategoryFilter !== '__all__' && !categories.includes(teamCategoryFilter)) teamCategoryFilter = '__all__';
+  filterEl.innerHTML = [`<div class="tab ${teamCategoryFilter==='__all__'?'active':''}" onclick="selectTeamCategory('__all__')">All</div>`]
+    .concat(categories.map(c=>`<div class="tab ${teamCategoryFilter===c?'active':''}" onclick="selectTeamCategory('${esc(c).replace(/'/g,"\\'")}')">${esc(c)}</div>`))
+    .join('');
+
+  let rows = users.filter(u=>{
+    if(teamCategoryFilter !== '__all__' && u.category !== teamCategoryFilter) return false;
+    return matches(term, u.discordId, u.displayName, u.category);
+  });
+  rows.sort((a,b)=> (a.displayName||a.discordId).localeCompare(b.displayName||b.discordId));
+
+  const activeNow = users.filter(u=>u.activity.length).length;
+  countEl.textContent = rows.length + ' editor' + (rows.length===1?'':'s') + ' · ' + activeNow + ' active in last 24h';
+
+  if(!rows.length){
+    list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-dim);">${term||teamCategoryFilter!=='__all__' ? 'No matching accounts' : 'No accounts yet'}</div>`;
+    return;
+  }
+
+  list.innerHTML = rows.map(u=>{
+    const name = u.displayName || u.discordId;
+    const active = u.activity.length > 0;
+    return `
+    <div class="team-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+        <div style="min-width:0;">
+          <div class="roster-name">
+            ${esc(name)}
+            ${u.isAdmin?'<span class="tag pos">Admin</span>':''}
+            <span class="tag info">${esc(u.category)}</span>
+            ${active?'<span class="tag pos">Active 24h</span>':'<span class="tag warn">Inactive 24h</span>'}
+          </div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">${esc(u.discordId)} · last logged action ${esc(relativeTime(u.activity[0] ? u.activity[0].ts : null))}</div>
+        </div>
+        ${currentUserIsAdmin ? `
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button class="btn alt small" onclick="setCategory('${u.id}','${esc(u.category==='Uncategorized'?'':u.category).replace(/'/g,"\\'")}')">Set category</button>
+          <button class="btn alt small" onclick="toggleAdmin('${u.id}',${!!u.isAdmin})">${u.isAdmin?'Remove admin':'Make admin'}</button>
+        </div>` : ''}
+      </div>
+      <details>
+        <summary>Activity — last 24h (${u.activity.length})</summary>
+        <div>
+          ${u.activity.length ? u.activity.map(e=>`
+            <div class="team-activity-row">
+              <div style="color:var(--text-mid);">${esc(e.action)}${e.dbKey?` <span class="tag warn">${esc(e.dbKey.toUpperCase())}</span>`:''} — ${esc(e.target||'')}${e.details?' · '+esc(e.details):''}</div>
+              <div style="font-size:10.5px;color:var(--text-dim);margin-top:2px;">${fmtDateTime(e.ts)} (${esc(relativeTime(e.ts))})</div>
+            </div>`).join('') : `<div style="padding:8px 0;color:var(--text-dim);font-size:11.5px;">No actions logged in the past 24 hours.</div>`}
+        </div>
+      </details>
+    </div>`;
+  }).join('');
 }
 
 // This is the ONLY thing Firestore Security Rules can actually trust — it's
