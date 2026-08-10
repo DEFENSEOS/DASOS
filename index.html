@@ -904,26 +904,16 @@ function initFirebase(){
     firebase.initializeApp(FIREBASE_CONFIG);
     db = firebase.firestore();
     cloudEnabled = true;
-    setStatus(true, "Cloud synced");
-    DATABASES.forEach(dbKey=>{
-      COLLECTIONS.forEach(col=>{
-        db.collection(colName(dbKey,col)).onSnapshot(snap=>{
-          DATA[dbKey][col] = [];
-          snap.forEach(doc=>{
-            DATA[dbKey][col].push({ id: doc.id, ...doc.data() });
-          });
-          renderPanel(dbKey, col);
-        }, err=>{
-          console.error("Firestore error on "+colName(dbKey,col), err);
-          setStatus(false, "Cloud error — check config");
-          const banner = document.getElementById('warnBanner');
-          banner.classList.add('show');
-          banner.textContent = "Cloud sync error (" + colName(dbKey,col) + "): " + err.message + ". This usually means your Firestore Security Rules are blocking access — check the Rules tab in the Firebase console.";
-        });
-      });
+    // Firestore Security Rules require request.auth != null, so we must have
+    // an anonymous session established BEFORE attaching any onSnapshot
+    // listeners — otherwise those listeners fire while unauthenticated,
+    // get a permission-denied error, and die (they do not silently retry
+    // once you later log into the app itself).
+    firebase.auth().onAuthStateChanged(user=>{
+      if(!user) return;
+      attachFirestoreListeners();
     });
-    initAuth();
-    initAuditLog();
+    ensureFirebaseAuth();
   }catch(e){
     console.error(e);
     document.getElementById('warnBanner').classList.add('show');
@@ -934,6 +924,32 @@ function initFirebase(){
     initAuth();
     initAuditLog();
   }
+}
+
+let firestoreListenersAttached = false;
+function attachFirestoreListeners(){
+  if(firestoreListenersAttached) return;
+  firestoreListenersAttached = true;
+  setStatus(true, "Cloud synced");
+  DATABASES.forEach(dbKey=>{
+    COLLECTIONS.forEach(col=>{
+      db.collection(colName(dbKey,col)).onSnapshot(snap=>{
+        DATA[dbKey][col] = [];
+        snap.forEach(doc=>{
+          DATA[dbKey][col].push({ id: doc.id, ...doc.data() });
+        });
+        renderPanel(dbKey, col);
+      }, err=>{
+        console.error("Firestore error on "+colName(dbKey,col), err);
+        setStatus(false, "Cloud error — check config");
+        const banner = document.getElementById('warnBanner');
+        banner.classList.add('show');
+        banner.textContent = "Cloud sync error (" + colName(dbKey,col) + "): " + err.message + ". This usually means your Firestore Security Rules are blocking access — check the Rules tab in the Firebase console.";
+      });
+    });
+  });
+  initAuth();
+  initAuditLog();
 }
 
 function setStatus(on, text){
